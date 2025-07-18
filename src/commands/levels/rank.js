@@ -62,12 +62,6 @@ export const execute = async (interaction) => {
     try {
       registerFont('./src/assets/fonts/Montserrat-Bold.ttf', { family: 'Montserrat', weight: 'bold' });
     } catch (e) {}
-    // Register Noto Color Emoji font for emoji support
-    try {
-      registerFont('/usr/share/fonts/truetype/noto/NotoColorEmoji.ttf', { family: 'Noto Color Emoji' });
-    } catch (e) {
-      console.warn('Noto Color Emoji font not found or failed to load. Emoji rendering may be broken.');
-    }
 
     // Create rank card
     const rankCardBuffer = await createRankCard(targetUser, userData, serverRank, xpThresholds);
@@ -285,7 +279,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   // Message XP Section
   const msgXP = userData.xp || 0;
   const msgStats = getSubLevelAndProgress(msgXP);
-  ctx.font = 'bold 15px Montserrat, "Noto Color Emoji", Arial';
+  ctx.font = 'bold 15px Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", Montserrat';
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'left';
   ctx.fillText('💬 Message XP', barX, sectionY);
@@ -307,7 +301,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   sectionY = msgBarY + barH + 32;
   const voiceXP = userData.voice_xp || 0;
   const voiceStats = getSubLevelAndProgress(voiceXP);
-  ctx.font = 'bold 15px Montserrat, "Noto Color Emoji", Arial';
+  ctx.font = 'bold 15px Arial, "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", Montserrat';
   ctx.fillStyle = '#fff';
   ctx.textAlign = 'left';
   ctx.fillText('🎤 Voice XP', barX, sectionY);
