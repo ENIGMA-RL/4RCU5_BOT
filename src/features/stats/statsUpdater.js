@@ -86,7 +86,7 @@ export async function scheduleTagRoleSync(client) {
   setInterval(async () => {
     try {
       console.log('🔄 Running periodic tag role sync...');
-      const guild = client.guilds.cache.first();
+      const guild = client.guilds.cache.get(process.env.GUILD_ID);
       if (!guild) {
         console.error('❌ No guild found for periodic tag sync');
         return;

@@ -3,7 +3,7 @@ import channelsConfig from '../config/channels.json' with { type: 'json' };
 
 export const logModerationAction = async (client, action, targetUser, moderator, reason, duration = null) => {
   try {
-    const guild = client.guilds.cache.first();
+    const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) return;
 
     const logChannel = await guild.channels.fetch(channelsConfig.logChannelId);
@@ -43,7 +43,7 @@ export const logModerationAction = async (client, action, targetUser, moderator,
 
 export const logRoleAssignment = async (client, member, role, assignedBy = null) => {
   try {
-    const guild = client.guilds.cache.first();
+    const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) return;
 
     const logChannel = guild.channels.cache.get(channelsConfig.logChannelId);
