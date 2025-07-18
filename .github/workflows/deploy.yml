@@ -19,12 +19,12 @@ jobs:
 
             cd /root
 
-            if [ ! -d "CNS_Bot" ]; then
+            if [ ! -d "4RCU5_BOT" ]; then
               echo "== Cloning repo at $(date) =="
-              git clone https://github.com/ENIGMA-RL/CNS_Bot.git
+              git clone https://github.com/ENIGMA-RL/4RCU5_BOT.git
             fi
 
-            cd CNS_Bot
+            cd 4RCU5_BOT
 
             echo "== Pulling latest changes at $(date) =="
             git pull origin main
