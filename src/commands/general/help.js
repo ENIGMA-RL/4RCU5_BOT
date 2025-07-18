@@ -30,6 +30,7 @@ export const execute = async (interaction) => {
       { name: '/help', description: 'Shows this help menu' },
       { name: '/ping', description: 'Check bot latency' },
       { name: '/info', description: 'Get bot information' },
+      { name: '/levels', description: 'View information about the XP system and available levels' },
       { name: '/rank', description: 'Check your level and XP' },
       { name: '/leaderboard', description: 'View server leaderboard' }
     ];
