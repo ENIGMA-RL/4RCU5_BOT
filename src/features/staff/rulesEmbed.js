@@ -12,13 +12,16 @@ export async function updateRulesEmbed(client, guildId) {
       console.error('Guild not found for rules embed update.');
       return;
     }
-    const channel = await guild.channels.fetch(channelId);
-    if (!channel || !channel.isTextBased()) {
-      console.error('Rules channel not found or not a text channel.');
+    // Fetch channel globally, then check ownership
+    const channel = await client.channels.fetch(channelId);
+    if (!channel || channel.guildId !== guildId || !channel.isTextBased()) {
+      console.error('Rules channel not found, not a text channel, or does not belong to specified guild.');
       return;
     }
 
-    const asciiArt = `\n\n\`\`\`\n ______     __   __     ______   \n/\\  ___\\   /\\ "-.\\ \\   /\\  ___\\  \n\\ \\ \\____  \\ \\ \\- .  \\  \\ \\___  \\ \n \\ \\_____\\  \\ \\_\\"\\_\\  \\/_____\\\n  \\/_____/   \\/_/ \\/_/   \\/_____/\n\`\`\`\n`;
+    const asciiArt = `\n\n\
+\`\`\`\n ______     __   __     ______   \n/\\  ___\\   /\\ "-.\\ \\   /\\  ___\\  \n\\ \\ \\____  \\ \\ \\- .  \\  \\ \\___  \\ \n \\ \\_____\\  \\ \\_\\"\\_\\  \\/_____\\\n  \\/_____/   \\/_/ \\/_/   \\/_____/
+\`\`\`\n`;
 
     const embed = new EmbedBuilder()
       .setTitle('🛡️ CNS Server Rules – Play Nice, Stay Sharp')
@@ -63,4 +66,4 @@ If you need any help or assistance please tag <@&${staffRoleId}>${asciiArt}`)
       console.error('Error path:', error.path);
     }
   }
-} 
+}
