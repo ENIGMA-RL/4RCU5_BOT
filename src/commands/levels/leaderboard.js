@@ -3,7 +3,8 @@ import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 import { getTopUsersByType } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
-const channelsConfig = JSON.parse(fs.readFileSync('./src/config/channels.json', 'utf8'));
+import { channelsConfig } from '../../config/configLoader.js';
+import { shouldBypassChannelRestrictions } from '../../utils/channelUtils.js';
 
 export const data = {
   name: 'leaderboard',
@@ -23,10 +24,10 @@ export const data = {
 export const execute = async (interaction) => {
   let deferred = false;
   try {
-    // Check if command is used in the correct channel
-    if (interaction.channelId !== channelsConfig.levelCheckChannelId) {
+    // Channel restriction (bypassed in bot test channel)
+    if (!shouldBypassChannelRestrictions(interaction.channelId) && interaction.channelId !== channelsConfig().levelCheckChannelId) {
       await interaction.reply({
-        content: `❌ This command can only be used in <#${channelsConfig.levelCheckChannelId}>`,
+        content: `❌ This command can only be used in <#${channelsConfig().levelCheckChannelId}>`,
         flags: 64
       });
       return;

@@ -8,11 +8,9 @@ import {
   getCurrentLevelXP,
   getTopUsers
 } from '../../database/db.js';
-import levelSettings from '../../config/levelSettings.json' with { type: 'json' };
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { levelSettingsConfig, channelsConfig, rolesConfig } from '../../config/configLoader.js';
 
-const { leveling } = levelSettings;
+const { leveling } = levelSettingsConfig();
 
 // XP tracking (no cooldowns)
 

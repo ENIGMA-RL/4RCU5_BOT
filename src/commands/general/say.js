@@ -1,4 +1,4 @@
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'say',
@@ -16,7 +16,7 @@ export const data = {
 
 export const execute = async (interaction) => {
   const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig.adminRoles.some(roleId => memberRoles.has(roleId));
+  const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
 
   if (!isAdmin) {
     return interaction.reply({

@@ -1,7 +1,7 @@
 import { ApplicationCommandOptionType, AttachmentBuilder } from 'discord.js';
 import fs from 'fs';
 import path from 'path';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'setbackground',
@@ -20,7 +20,7 @@ export const data = {
 export const execute = async (interaction) => {
   try {
     // Restrict to CNS Developer role only
-    const devRoleId = rolesConfig.cnsDeveloperRole;
+    const devRoleId = rolesConfig().cnsDeveloperRole;
     if (!interaction.member.roles.cache.has(devRoleId)) {
       await interaction.reply({
         content: '❌ Only users with the CNS Developer role can set the rank card background.',

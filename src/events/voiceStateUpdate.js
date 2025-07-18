@@ -1,7 +1,6 @@
 import { handleVoiceXP } from '../features/leveling/levelingSystem.js';
 import { PermissionsBitField } from 'discord.js';
-import channelsConfig from '../config/channels.json' with { type: 'json' };
-import rolesConfig from '../config/roles.json' with { type: 'json' };
+import { channelsConfig, rolesConfig } from '../config/configLoader.js';
 
 export const name = 'voiceStateUpdate';
 export const once = false;
@@ -54,7 +53,7 @@ export const execute = async (oldState, newState) => {
   if (!newState.channelId && !oldState.channelId) return;
 
   // Join to Create logic with stableTicks polling and move delay
-  if (newState.channelId === channelsConfig.joinToCreateChannelId) {
+  if (newState.channelId === channelsConfig().joinToCreateChannelId) {
     const member = newState.member;
     const guild = newState.guild;
     const userId = member.id;
@@ -79,7 +78,7 @@ export const execute = async (oldState, newState) => {
       const fresh = await guild.members.fetch(userId);
       const chan = fresh.voice.channel;
 
-      if (chan?.id === channelsConfig.joinToCreateChannelId && chan.members.has(userId)) {
+      if (chan?.id === channelsConfig().joinToCreateChannelId && chan.members.has(userId)) {
         stableTicks++;
       } else {
         stableTicks = 0;
@@ -101,7 +100,7 @@ export const execute = async (oldState, newState) => {
           const newChannel = await guild.channels.create({
             name: `${member.user.username}'s Channel`,
             type: 2, // GUILD_VOICE
-            parent: channelsConfig.voiceCategoryId,
+            parent: channelsConfig().voiceCategoryId,
             permissionOverwrites: [
               {
                 id: guild.id,
@@ -120,7 +119,7 @@ export const execute = async (oldState, newState) => {
           try {
             // Re-fetch the member to get the latest voice state
             const freshMember = await guild.members.fetch(member.id);
-            if (freshMember.voice.channelId === channelsConfig.joinToCreateChannelId) {
+            if (freshMember.voice.channelId === channelsConfig().joinToCreateChannelId) {
               await freshMember.voice.setChannel(newChannel);
               console.log(`[JoinToCreate] SUCCESS! Moved ${member.user.tag} to their new channel!`);
             } else {

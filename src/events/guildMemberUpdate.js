@@ -1,6 +1,6 @@
 import { syncUserTagRole } from '../features/tagSync/tagSyncService.js';
 import { refreshStaffEmbed } from '../features/staff/staffEmbed.js';
-import staffConfig from '../config/staff.json' with { type: 'json' };
+import { staffConfig } from '../config/configLoader.js';
 
 export const name = 'guildMemberUpdate';
 export const once = false;
@@ -26,7 +26,7 @@ export const execute = async (oldMember, newMember) => {
     const oldRoles = oldMember.roles.cache;
     const newRoles = newMember.roles.cache;
     
-    const staffRoleIds = staffConfig.staffRoles.map(role => role.id);
+    const staffRoleIds = staffConfig().staffRoles.map(role => role.id);
     
     // Check if any staff roles changed
     const hasStaffRoleChange = staffRoleIds.some(roleId => 

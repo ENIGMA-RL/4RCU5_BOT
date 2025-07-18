@@ -1,8 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 import { logAction } from '../features/logger/logger.js';
 import { updateStats } from '../features/stats/statsUpdater.js';
-import channelsConfig from '../config/channels.json' with { type: 'json' };
-import rolesConfig from '../config/roles.json' with { type: 'json' };
+import { channelsConfig, rolesConfig } from '../config/configLoader.js';
 
 export const name = 'guildMemberAdd';
 export const once = false;
@@ -15,13 +14,13 @@ export const execute = async (member) => {
     logAction(`New member joined: ${member.user.tag}`);
     
     // Send welcome message to welcome channel
-    const welcomeChannel = await member.guild.channels.fetch(channelsConfig.welcomeChannelId).catch(() => null);
+    const welcomeChannel = await member.guild.channels.fetch(channelsConfig().welcomeChannelId).catch(() => null);
     if (welcomeChannel && welcomeChannel.isTextBased()) {
       await welcomeChannel.send({ content: `${member} Joined CNS` });
     }
     
     // Assign CNS role to new member
-    const CNS_ROLE_ID = '1026533888677388309';
+    const CNS_ROLE_ID = rolesConfig().cnsRole;
     try {
       await member.roles.add(CNS_ROLE_ID, 'New member CNS role');
       console.log(`✅ Assigned CNS role to ${member.user.tag}`);
@@ -30,7 +29,7 @@ export const execute = async (member) => {
     }
     
     // Update stats when a member joins
-    await updateStats(member.client, member.guild.id, channelsConfig.statsChannelId);
+    await updateStats(member.client, member.guild.id, channelsConfig().statsChannelId);
     
   } catch (error) {
     console.error('Error in guildMemberAdd event:', error);

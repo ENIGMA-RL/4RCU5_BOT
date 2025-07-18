@@ -1,6 +1,6 @@
 import { ApplicationCommandOptionType, PermissionFlagsBits } from 'discord.js';
 import { logModerationAction } from '../../utils/moderationLogger.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'kick',
@@ -19,8 +19,8 @@ export const data = {
 export const execute = async (interaction) => {
   // Check if user has admin or mod permissions
   const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig.adminRoles.some(roleId => memberRoles.has(roleId));
-  const isMod = rolesConfig.modRoles.some(roleId => memberRoles.has(roleId));
+  const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
+  const isMod = rolesConfig().modRoles.some(roleId => memberRoles.has(roleId));
   
   if (!isAdmin && !isMod) {
     await interaction.reply({

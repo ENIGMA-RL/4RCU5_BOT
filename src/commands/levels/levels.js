@@ -1,9 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import fs from 'fs';
-
-// Load configs
-const levelSettingsConfig = JSON.parse(fs.readFileSync('./src/config/levelSettings.json', 'utf8'));
-const rolesConfig = JSON.parse(fs.readFileSync('./src/config/roles.json', 'utf8'));
+import { levelSettingsConfig, rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'levels',
@@ -15,10 +11,10 @@ export const data = {
 export const execute = async (interaction) => {
   try {
     // Get role mentions
-    const cnsNewcomerRole = interaction.guild.roles.cache.get(rolesConfig.levelRoles.cnsNewcomer);
-    const cnsMemberRole = interaction.guild.roles.cache.get(rolesConfig.levelRoles.cnsMember);
-    const cnsOfficialRole = interaction.guild.roles.cache.get(rolesConfig.cnsOfficialRole);
-    const cnsSpecialMemberRole = interaction.guild.roles.cache.get(rolesConfig.cnsSpecialMemberRole);
+    const cnsNewcomerRole = interaction.guild.roles.cache.get(rolesConfig().levelRoles.cnsNewcomer);
+    const cnsMemberRole = interaction.guild.roles.cache.get(rolesConfig().levelRoles.cnsMember);
+    const cnsOfficialRole = interaction.guild.roles.cache.get(rolesConfig().cnsOfficialRole);
+    const cnsSpecialMemberRole = interaction.guild.roles.cache.get(rolesConfig().cnsSpecialMemberRole);
 
     const embed = new EmbedBuilder()
       .setTitle('🎯 CNS Leveling System')
@@ -30,14 +26,14 @@ export const execute = async (interaction) => {
     // XP System Info
     embed.addFields({
       name: '📊 XP System',
-      value: `• **Message XP**: ${levelSettingsConfig.leveling.xpPerMessage} XP per message\n• **Voice XP**: ${levelSettingsConfig.leveling.xpPerMinuteVoice} XP per minute in voice channels\n• Use \`/rank\` to see your progress\n• Use \`/leaderboard\` to see top players`,
+      value: `• **Message XP**: ${levelSettingsConfig().leveling.xpPerMessage} XP per message\n• **Voice XP**: ${levelSettingsConfig().leveling.xpPerMinuteVoice} XP per minute in voice channels\n• Use \`/rank\` to see your progress\n• Use \`/leaderboard\` to see top players`,
       inline: false
     });
 
     // Available Levels
-    const levelUpRoles = levelSettingsConfig.leveling.levelUpRoles;
-    const xpThresholds = levelSettingsConfig.leveling.xpThresholds;
-    const roleAssignments = levelSettingsConfig.leveling.roleAssignments;
+    const levelUpRoles = levelSettingsConfig().leveling.levelUpRoles;
+    const xpThresholds = levelSettingsConfig().leveling.xpThresholds;
+    const roleAssignments = levelSettingsConfig().leveling.roleAssignments;
     
     let levelsText = '';
     for (const [level, roleName] of Object.entries(levelUpRoles)) {

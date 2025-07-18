@@ -1,7 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import staffConfig from '../../config/staff.json' with { type: 'json' };
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
+import { staffConfig, rolesConfig, channelsConfig } from '../../config/configLoader.js';
 
 
 export async function updateStaffEmbed(client, guildId, channelId) {
@@ -48,7 +46,7 @@ export async function updateStaffEmbed(client, guildId, channelId) {
       .setColor('#b544ee')
       .setTimestamp();
 
-    for (const roleConfig of staffConfig.staffRoles) {
+    for (const roleConfig of staffConfig().staffRoles) {
       const role = await guild.roles.fetch(roleConfig.id);
       if (!role) {
         console.error(`Staff role ${roleConfig.id} not found.`);
@@ -85,8 +83,8 @@ export async function updateStaffEmbed(client, guildId, channelId) {
 }
 
 export async function refreshStaffEmbed(client) {
-  const guildId = rolesConfig.tagGuildId;
-  const channelId = channelsConfig.staffChannelId;
+  const guildId = rolesConfig().tagGuildId;
+  const channelId = channelsConfig().staffChannelId;
   await updateStaffEmbed(client, guildId, channelId);
 }
 

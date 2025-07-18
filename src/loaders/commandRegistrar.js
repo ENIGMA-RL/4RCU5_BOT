@@ -1,7 +1,6 @@
 import { REST, Routes } from 'discord.js';
 import fs from 'fs';
 import dotenv from 'dotenv';
-import rolesConfig from '../config/roles.json' with { type: 'json' };
 
 dotenv.config();
 

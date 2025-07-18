@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { syncTagRolesFromGuild, syncAllUserTags } from '../../features/tagSync/tagSyncService.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig, isDev } from '../../config/configLoader.js';
 
 export const data = {
   name: 'tag-sync',
@@ -30,7 +30,7 @@ export const execute = async (interaction) => {
   try {
     // Check if user has CNS Developer role
     const memberRoles = interaction.member.roles.cache;
-    const isCnsDev = memberRoles.has(rolesConfig.cnsDeveloperRole);
+    const isCnsDev = memberRoles.has(rolesConfig().cnsDeveloperRole);
     if (!isCnsDev) {
       await interaction.reply({
         content: '❌ Only users with the CNS Developer role can use this command.',
@@ -50,7 +50,21 @@ export const execute = async (interaction) => {
       result = await syncTagRolesFromGuild(interaction.guild, interaction.client);
     }
 
-    if (syncType === 'bulk') {
+    if (isDev()) {
+      const embed = new EmbedBuilder()
+        .setTitle('🔄 CNS Tag Role Sync Results')
+        .setColor('#ffff00') // Yellow for development
+        .setDescription('Tag role synchronization skipped in development mode!')
+        .addFields(
+          { name: 'ℹ️ Status', value: 'Tag sync is disabled in development mode', inline: true },
+          { name: '📊 Processed', value: '0', inline: true },
+          { name: '✅ Success', value: '0', inline: true }
+        )
+        .setTimestamp()
+        .setFooter({ text: `Triggered by ${interaction.user.tag} (Development Mode)` });
+      
+      await interaction.editReply({ embeds: [embed] });
+    } else if (syncType === 'bulk') {
       const embed = new EmbedBuilder()
         .setTitle('🔄 CNS Tag Role Bulk Sync Results')
         .setColor('#00ff00')
