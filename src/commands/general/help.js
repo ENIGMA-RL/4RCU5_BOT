@@ -104,7 +104,8 @@ export const execute = async (interaction) => {
         { name: '/purge', description: 'Deletes all messages from the current channel (CNS Developer only)' },
         { name: '/setbackground', description: 'Upload a background image for rank cards (CNS Developer only)' },
         { name: '/tag-sync', description: 'Manually sync CNS tag roles based on tag guild membership (CNS Developer only)' },
-        { name: '/migrate-message-xp', description: 'DEV ONLY: Count all messages per user and update message XP accordingly' }
+        { name: '/migrate-message-xp', description: 'DEV ONLY: Count all messages per user and update message XP accordingly' },
+        { name: '/sync-level-roles', description: 'Sync level roles for all members (CNS Developer only)' }
       ];
       embed.addFields({
         name: '🛠️ Developer Commands',
