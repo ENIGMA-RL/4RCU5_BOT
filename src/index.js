@@ -110,13 +110,11 @@ client.on('raw', async (packet) => {
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
   setPresence(client);
-  console.log('🔍 Executing scheduleStatsUpdate and scheduleTagRoleSync');
-  
-  // Get the first guild (assuming single guild bot)
-  const guild = client.guilds.cache.first();
+  const GUILD_ID = process.env.GUILD_ID;
+  console.log('Using GUILD_ID from environment:', GUILD_ID);
+  const guild = client.guilds.cache.get(GUILD_ID);
   if (guild) {
-    console.log(`Connected to guild: ${guild.name}`);
-    
+    console.log(`Connected to guild: ${guild.name} (${guild.id})`);
     // Fetch all members to ensure we have complete member cache
     console.log('🔄 Fetching all guild members...');
     try {
@@ -125,17 +123,13 @@ client.once('ready', async () => {
     } catch (error) {
       console.error('❌ Error fetching members:', error);
     }
-    
     // Schedule the stats update with proper guild ID
     console.log('🔍 Calling scheduleStatsUpdate');
     scheduleStatsUpdate(client, guild.id, channelsConfig.statsChannelId);
-    
     // Schedule the staff embed update
     scheduleStaffEmbedUpdate(client, guild.id, channelsConfig.staffChannelId);
-
     // Auto-update the rules embed
     await updateRulesEmbed(client, guild.id);
-    
     // Schedule rules embed updates every 5 minutes
     setInterval(async () => {
       try {
@@ -144,14 +138,13 @@ client.once('ready', async () => {
         console.error('Error updating rules embed:', error);
       }
     }, 5 * 60 * 1000);
-    
     // Schedule the periodic tag role sync
     console.log('🔍 Calling scheduleTagRoleSync');
     scheduleTagRoleSync(client);
-    
     console.log('📊 Stats, staff embed, and tag sync systems initialized');
+  } else {
+    console.error('❌ Could not find guild with ID:', GUILD_ID);
   }
-  
   // Register commands dynamically based on roles
   await registerCommands(client);
 });
