@@ -219,7 +219,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   y += 18;
   ctx.font = '15px Montserrat, Arial';
   ctx.fillStyle = '#fff';
-  ctx.fillText(`Total XP: ${userData.xp || 0}`, textStartX, y);
+  ctx.fillText(`Total XP: ${(userData.xp || 0) + (userData.voice_xp || 0)}`, textStartX, y);
   y += 20;
   ctx.font = '16px "Arial Narrow", Arial, sans-serif';
   ctx.fillStyle = '#bdbdbd';
