@@ -5,8 +5,10 @@ import channelsConfig from '../../config/channels.json' with { type: 'json' };
 
 
 export async function updateStaffEmbed(client, guildId, channelId) {
+  let guild, channel;
+  
   try {
-    const guild = await client.guilds.fetch(guildId);
+    guild = await client.guilds.fetch(guildId);
     if (!guild) {
       console.error('Guild not found for staff embed update.');
       return;
@@ -14,7 +16,7 @@ export async function updateStaffEmbed(client, guildId, channelId) {
 
     await guild.members.fetch();
 
-    const channel = await guild.channels.fetch(channelId);
+    channel = await guild.channels.fetch(channelId);
     if (!channel || !channel.isTextBased()) {
       console.error('Staff channel not found or not a text channel.');
       return;
@@ -74,9 +76,18 @@ export async function refreshStaffEmbed(client) {
 }
 
 export function scheduleStaffEmbedUpdate(client, guildId, channelId) {
-  setInterval(() => {
-    updateStaffEmbed(client, guildId, channelId);
+  console.log('📋 Scheduling staff embed updates every 5 minutes');
+  setInterval(async () => {
+    try {
+      console.log('📋 Updating staff embed...');
+      await updateStaffEmbed(client, guildId, channelId);
+      console.log('✅ Staff embed updated successfully');
+    } catch (error) {
+      console.error('❌ Error in scheduled staff embed update:', error);
+    }
   }, 5 * 60 * 1000);
 
+  // Initial update
+  console.log('📋 Running initial staff embed update...');
   updateStaffEmbed(client, guildId, channelId);
 }

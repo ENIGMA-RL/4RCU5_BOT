@@ -136,6 +136,15 @@ client.once('ready', async () => {
     // Auto-update the rules embed
     await updateRulesEmbed(client, guild.id);
     
+    // Schedule rules embed updates every 5 minutes
+    setInterval(async () => {
+      try {
+        await updateRulesEmbed(client, guild.id);
+      } catch (error) {
+        console.error('Error updating rules embed:', error);
+      }
+    }, 5 * 60 * 1000);
+    
     // Schedule the periodic tag role sync
     console.log('🔍 Calling scheduleTagRoleSync');
     scheduleTagRoleSync(client);

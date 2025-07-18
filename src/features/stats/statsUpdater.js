@@ -64,9 +64,16 @@ export async function updateStats(client, guildId, channelId) {
 // Schedule periodic stats updates
 export function scheduleStatsUpdate(client, guildId, channelId) {
   console.log('📊 Starting periodic stats update interval');
+  
+  // Initial update
+  console.log('📊 Running initial stats update...');
+  updateStats(client, guildId, channelId);
+  
   setInterval(async () => {
     try {
+      console.log('📊 Updating server stats...');
       await updateStats(client, guildId, channelId);
+      console.log('✅ Server stats updated successfully');
     } catch (error) {
       console.error('Error during periodic stats update:', error);
     }
