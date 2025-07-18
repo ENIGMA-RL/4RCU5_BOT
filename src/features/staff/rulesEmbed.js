@@ -5,17 +5,33 @@ import rolesConfig from '../../config/roles.json' with { type: 'json' };
 export async function updateRulesEmbed(client, guildId) {
   try {
     const channelId = channelsConfig.rulesChannelId;
-    const staffRoleId = rolesConfig.staffRole;
-    console.log('Fetching rules channel:', channelId, 'in guild:', guildId);
+    console.log(`[RulesEmbed] Attempting to update rules embed for guildId: ${guildId}, channelId: ${channelId}`);
     const guild = await client.guilds.fetch(guildId);
     if (!guild) {
-      console.error('Guild not found for rules embed update.');
+      console.error('[RulesEmbed] Guild not found for rules embed update.');
       return;
     }
+    console.log(`[RulesEmbed] Fetched guild: ${guild.name} (${guild.id})`);
+    // Log all channel IDs in the guild
+    const allChannels = await guild.channels.fetch();
+    const channelIds = Array.from(allChannels.values()).map(c => `${c.name} (${c.id}) [type: ${c.type}]`);
+    console.log(`[RulesEmbed] Guild channels:`, channelIds);
     // Fetch channel globally, then check ownership
-    const channel = await client.channels.fetch(channelId);
-    if (!channel || channel.guildId !== guildId || !channel.isTextBased()) {
-      console.error('Rules channel not found, not a text channel, or does not belong to specified guild.');
+    const channel = await client.channels.fetch(channelId).catch(e => {
+      console.error(`[RulesEmbed] Error fetching channel: ${e}`);
+      return null;
+    });
+    if (!channel) {
+      console.error(`[RulesEmbed] Rules channel not found for ID: ${channelId}`);
+      return;
+    }
+    console.log(`[RulesEmbed] Fetched channel: ${channel.name} (${channel.id}), type: ${channel.type}`);
+    if (!channel.isTextBased()) {
+      console.error('[RulesEmbed] Rules channel is not a text channel.');
+      return;
+    }
+    if (channel.guildId !== guildId) {
+      console.error(`[RulesEmbed] Channel's guildId (${channel.guildId}) does not match expected guildId (${guildId})`);
       return;
     }
 
@@ -45,7 +61,7 @@ We’re here for CNS and The Finals, not your mixtape or crypto coin.
 6. **VAIIYA Members Not Allowed**
 You know who you are. This ain't your playground.
 
-If you need any help or assistance please tag <@&${staffRoleId}>${asciiArt}`)
+If you need any help or assistance please tag <@&${rolesConfig.staffRole}>${asciiArt}`)
       .setFooter({ text: 'Last updated' })
       .setTimestamp();
 

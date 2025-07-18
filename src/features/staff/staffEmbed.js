@@ -6,23 +6,38 @@ import channelsConfig from '../../config/channels.json' with { type: 'json' };
 
 export async function updateStaffEmbed(client, guildId, channelId) {
   let guild, channel;
-  
+  console.log(`[StaffEmbed] Attempting to update staff embed for guildId: ${guildId}, channelId: ${channelId}`);
   try {
     guild = await client.guilds.fetch(guildId);
     if (!guild) {
-      console.error('Guild not found for staff embed update.');
+      console.error('[StaffEmbed] Guild not found for staff embed update.');
       return;
     }
-
+    console.log(`[StaffEmbed] Fetched guild: ${guild.name} (${guild.id})`);
+    // Log all channel IDs in the guild
+    const allChannels = await guild.channels.fetch();
+    const channelIds = Array.from(allChannels.values()).map(c => `${c.name} (${c.id}) [type: ${c.type}]`);
+    console.log(`[StaffEmbed] Guild channels:`, channelIds);
     await guild.members.fetch();
-
-    channel = await guild.channels.fetch(channelId);
-    if (!channel || !channel.isTextBased()) {
-      console.error('Staff channel not found or not a text channel.');
+    channel = await guild.channels.fetch(channelId).catch(e => {
+      console.error(`[StaffEmbed] Error fetching channel: ${e}`);
+      return null;
+    });
+    if (!channel) {
+      console.error(`[StaffEmbed] Staff channel not found for ID: ${channelId}`);
+      return;
+    }
+    console.log(`[StaffEmbed] Fetched channel: ${channel.name} (${channel.id}), type: ${channel.type}`);
+    if (!channel.isTextBased()) {
+      console.error('[StaffEmbed] Staff channel is not a text channel.');
+      return;
+    }
+    if (channel.guildId !== guildId) {
+      console.error(`[StaffEmbed] Channel's guildId (${channel.guildId}) does not match expected guildId (${guildId})`);
       return;
     }
   } catch (error) {
-    console.error('Error fetching guild or channel for staff embed:', error);
+    console.error('[StaffEmbed] Error fetching guild or channel for staff embed:', error);
     return;
   }
 
