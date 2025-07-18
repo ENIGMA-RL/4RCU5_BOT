@@ -262,13 +262,20 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
     let subLevel = 0;
     let prev = 0;
     let next = 0;
-    for (let i = 0; i < levels.length; i++) {
-      if (xp >= xpThresholds[levels[i]]) {
-        subLevel = levels[i];
-        prev = xpThresholds[levels[i]];
-        next = xpThresholds[levels[i + 1]] || prev + 100;
-      } else {
-        break;
+    if (xp < xpThresholds[levels[0]]) {
+      // Level 0: show progress towards level 1
+      prev = 0;
+      next = xpThresholds[levels[0]];
+      subLevel = 0;
+    } else {
+      for (let i = 0; i < levels.length; i++) {
+        if (xp >= xpThresholds[levels[i]]) {
+          subLevel = levels[i];
+          prev = xpThresholds[levels[i]];
+          next = xpThresholds[levels[i + 1]] || prev + 100;
+        } else {
+          break;
+        }
       }
     }
     const inLevelXP = xp - prev;
