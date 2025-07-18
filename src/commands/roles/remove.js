@@ -1,5 +1,5 @@
 import { ApplicationCommandOptionType } from 'discord.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'role-remove',
@@ -25,7 +25,7 @@ export const execute = async (interaction) => {
   try {
     // Check if user has admin permissions
     const memberRoles = interaction.member.roles.cache;
-    const isAdmin = rolesConfig.adminRoles.some(roleId => memberRoles.has(roleId));
+    const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
     
     if (!isAdmin) {
       await interaction.reply({

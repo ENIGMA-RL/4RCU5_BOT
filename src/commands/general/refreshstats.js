@@ -1,5 +1,5 @@
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
+import { rolesConfig, channelsConfig } from '../../config/configLoader.js';
+import { updateStats } from '../../features/stats/statsUpdater.js';
 
 export const data = {
   name: 'refreshstats',
@@ -10,7 +10,7 @@ export const data = {
 
 export const execute = async (interaction) => {
   const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig.adminRoles.some(roleId => memberRoles.has(roleId));
+  const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
 
   if (!isAdmin) {
     return interaction.reply({
@@ -27,7 +27,7 @@ export const execute = async (interaction) => {
 
     // Get the guild and stats channel
     const guild = interaction.guild;
-    const statsChannelId = channelsConfig.statsChannelId;
+    const statsChannelId = channelsConfig().statsChannelId;
 
     if (!statsChannelId) {
       await interaction.editReply({

@@ -1,6 +1,5 @@
 import { updateUserXP, getUser, createUser } from '../../database/db.js';
-import levelSettings from '../../config/levelSettings.json' with { type: 'json' };
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { levelSettingsConfig, rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'migrate-message-xp',
@@ -10,7 +9,7 @@ export const data = {
 
 export const execute = async (interaction) => {
   const memberRoles = interaction.member.roles.cache;
-  const isCnsDev = memberRoles.has(rolesConfig.cnsDeveloperRole);
+  const isCnsDev = memberRoles.has(rolesConfig().cnsDeveloperRole);
   if (!isCnsDev) {
     await interaction.reply({
       content: '❌ Only users with the CNS Developer role can use this command.',
@@ -32,7 +31,7 @@ export const execute = async (interaction) => {
       content: '⏳ Counting messages in all text channels. This may take up to a minute...'
     });
     const guild = interaction.guild;
-    const xpPerMessage = levelSettings.leveling.xpPerMessage;
+    const xpPerMessage = levelSettingsConfig().leveling.xpPerMessage;
     const userMessageCounts = {};
     let totalMessages = 0;
     let channelCount = 0;

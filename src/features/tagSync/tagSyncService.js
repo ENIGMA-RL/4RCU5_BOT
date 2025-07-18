@@ -1,7 +1,6 @@
 import fetch from 'node-fetch';
 import { logRoleAssignment } from '../../utils/moderationLogger.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
+import { rolesConfig, channelsConfig, isDev } from '../../config/configLoader.js';
 import { EmbedBuilder } from 'discord.js';
 
 /**
@@ -29,7 +28,7 @@ export async function checkUserTagStatus(userId, client) {
     // Check if user has tag enabled for the configured guild
     const isUsingTag = tagData && 
                       tagData.identity_enabled && 
-                      tagData.identity_guild_id === rolesConfig.tagGuildId;
+                      tagData.identity_guild_id === rolesConfig().tagGuildId;
 
     return {
       userId,
@@ -53,6 +52,17 @@ export async function checkUserTagStatus(userId, client) {
 export async function syncUserTagRole(userId, guild, client) {
   try {
     
+    // Skip tag sync in development mode
+    if (isDev()) {
+      console.log(`[TagSync] Skipping tag sync for user ${userId} in development mode`);
+      return { 
+        success: true, 
+        action: 'skipped', 
+        user: 'Development Mode',
+        reason: 'Tag sync disabled in development'
+      };
+    }
+    
     // Check user's tag status using bot token
     const tagStatus = await checkUserTagStatus(userId, client);
     
@@ -62,7 +72,7 @@ export async function syncUserTagRole(userId, guild, client) {
       return { success: false, error: 'Member not found' };
     }
 
-    const cnsOfficialRoleId = rolesConfig.cnsOfficialRole;
+    const cnsOfficialRoleId = rolesConfig().cnsOfficialRole;
     const hasRole = member.roles.cache.has(cnsOfficialRoleId);
 
     if (tagStatus.isUsingTag) {
@@ -128,6 +138,19 @@ export async function syncUserTagRole(userId, guild, client) {
  */
 export async function syncAllUserTags(guild, client) {
   try {
+    // Skip tag sync in development mode
+    if (isDev()) {
+      console.log(`[TagSync] Skipping bulk tag sync in development mode`);
+      return {
+        success: true,
+        processed: 0,
+        successCount: 0,
+        errorCount: 0,
+        results: [],
+        message: 'Tag sync disabled in development mode'
+      };
+    }
+    
     // Fetch all members in the guild
     const members = await guild.members.fetch();
     
@@ -199,10 +222,16 @@ export async function syncAllUserTags(guild, client) {
  * @returns {Promise<{count: number, updated: number, removed: number}>}
  */
 export async function syncTagRolesFromGuild(mainGuild, client) {
-  const tagGuildId = rolesConfig.tagGuildId;
-  const tagRoleId = rolesConfig.cnsOfficialRole;
-  const statsChannelId = channelsConfig.statsChannelId;
-  const logChannelId = channelsConfig.logChannelId;
+  // Skip tag sync in development mode
+  if (isDev()) {
+    console.log(`[TagSync] Skipping tag guild sync in development mode`);
+    return { count: 0, updated: 0, removed: 0 };
+  }
+  
+  const tagGuildId = rolesConfig().tagGuildId;
+  const tagRoleId = rolesConfig().cnsOfficialRole;
+  const statsChannelId = channelsConfig().statsChannelId;
+  const logChannelId = channelsConfig().logChannelId;
 
   // Fetch all members in the main guild
   const mainGuildMembers = await mainGuild.members.fetch();

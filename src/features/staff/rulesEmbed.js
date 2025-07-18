@@ -1,10 +1,9 @@
 import { EmbedBuilder } from 'discord.js';
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { channelsConfig, rolesConfig } from '../../config/configLoader.js';
 
 export async function updateRulesEmbed(client, guildId) {
   try {
-    const channelId = channelsConfig.rulesChannelId;
+    const channelId = channelsConfig().rulesChannelId;
     console.log(`[RulesEmbed] Attempting to update rules embed for guildId: ${guildId}, channelId: ${channelId}`);
     const guild = await client.guilds.fetch(guildId);
     if (!guild) {
@@ -61,7 +60,7 @@ We’re here for CNS and The Finals, not your mixtape or crypto coin.
 6. **VAIIYA Members Not Allowed**
 You know who you are. This ain't your playground.
 
-If you need any help or assistance please tag <@&${rolesConfig.staffRole}>${asciiArt}`)
+If you need any help or assistance please tag <@&${rolesConfig().staffRole}>${asciiArt}`)
       .setFooter({ text: 'Last updated' })
       .setTimestamp();
 

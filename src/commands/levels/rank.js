@@ -5,8 +5,8 @@ import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 import { getUserRank } from '../../database/db.js';
 import fs from 'fs';
 import path from 'path';
-
-const channelsConfig = JSON.parse(fs.readFileSync('./src/config/channels.json', 'utf8'));
+import { channelsConfig, levelSettingsConfig } from '../../config/configLoader.js';
+import { shouldBypassChannelRestrictions as bypassCheck } from '../../utils/channelUtils.js';
 
 export const data = {
   name: 'rank',
@@ -24,10 +24,10 @@ export const data = {
 
 export const execute = async (interaction) => {
   try {
-    // Channel restriction
-    if (interaction.channelId !== channelsConfig.levelCheckChannelId) {
+    // Channel restriction (bypassed in bot test channel)
+    if (!bypassCheck(interaction.channelId) && interaction.channelId !== channelsConfig().levelCheckChannelId) {
       await interaction.reply({
-        content: `❌ This command can only be used in <#${channelsConfig.levelCheckChannelId}>`,
+        content: `❌ This command can only be used in <#${channelsConfig().levelCheckChannelId}>`,
         flags: 64
       });
       return;
@@ -50,13 +50,13 @@ export const execute = async (interaction) => {
     const serverRank = getUserRank(userId);
     
     // Load level settings
-    const levelSettingsConfig = JSON.parse(fs.readFileSync('./src/config/levelSettings.json', 'utf8'));
-    if (!levelSettingsConfig?.leveling?.xpThresholds) {
+    const levelSettings = levelSettingsConfig();
+    if (!levelSettings?.leveling?.xpThresholds) {
       await interaction.editReply({ content: '❌ Level config is missing or invalid.' });
       return;
     }
 
-    const xpThresholds = levelSettingsConfig.leveling.xpThresholds;
+    const xpThresholds = levelSettings.leveling.xpThresholds;
     
     // Register custom font (Montserrat) if available
     try {
@@ -194,7 +194,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   }
 
   // Show levelUpRole title below username if available
-  const levelUpRoles = JSON.parse(fs.readFileSync('./src/config/levelSettings.json', 'utf8')).leveling.levelUpRoles;
+  const levelUpRoles = levelSettingsConfig().leveling.levelUpRoles;
   let bestTitle = null;
   let bestLevel = 0;
   for (const key of Object.keys(levelUpRoles).map(Number).sort((a, b) => a - b)) {

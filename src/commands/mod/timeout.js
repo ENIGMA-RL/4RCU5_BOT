@@ -1,6 +1,6 @@
 import { ApplicationCommandOptionType } from 'discord.js';
 import { logModerationAction } from '../../utils/moderationLogger.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'timeout',
@@ -19,8 +19,8 @@ export const data = {
 export const execute = async (interaction) => {
   // Check if user has admin or mod permissions
   const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig.adminRoles.some(roleId => memberRoles.has(roleId));
-  const isMod = rolesConfig.modRoles.some(roleId => memberRoles.has(roleId));
+  const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
+  const isMod = rolesConfig().modRoles.some(roleId => memberRoles.has(roleId));
   
   if (!isAdmin && !isMod) {
     await interaction.reply({
@@ -116,4 +116,33 @@ export const execute = async (interaction) => {
       flags: 64 
     });
   }
-}; 
+};
+
+// Helper function to parse duration strings
+function parseDuration(durationStr) {
+  const timeUnits = {
+    's': 1000,           // seconds
+    'sec': 1000,
+    'seconds': 1000,
+    'm': 60 * 1000,      // minutes
+    'min': 60 * 1000,
+    'minutes': 60 * 1000,
+    'h': 60 * 60 * 1000, // hours
+    'hr': 60 * 60 * 1000,
+    'hours': 60 * 60 * 1000,
+    'd': 24 * 60 * 60 * 1000, // days
+    'days': 24 * 60 * 60 * 1000
+  };
+
+  const match = durationStr.match(/^(\d+)\s*([a-zA-Z]+)$/);
+  if (!match) return null;
+
+  const value = parseInt(match[1]);
+  const unit = match[2].toLowerCase();
+
+  if (timeUnits[unit]) {
+    return value * timeUnits[unit];
+  }
+
+  return null;
+} 

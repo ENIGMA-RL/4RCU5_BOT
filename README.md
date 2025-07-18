@@ -83,9 +83,43 @@
 
 ## 🔒 Environment & Configuration
 
-- **.env**: Store secrets and environment-specific variables here. This file is ignored by git.
-- **src/config/**: Store general configuration files (IDs, settings, etc.).
-- **config.test/**: (Optional) Use this folder for local/test config overrides. It is gitignored and will not be committed.
+### **Production Environment**
+- **.env**: Store production secrets and environment-specific variables here. This file is ignored by git.
+- **src/config/**: Store production configuration files (IDs, settings, etc.).
+
+### **Development Environment**
+- **.env.dev**: Store development environment variables (gitignored)
+- **src/config.test/**: Development configuration files with test server IDs and settings
+- **NODE_ENV=development**: Automatically loads config.test/ files when set
+
+### **Environment Setup**
+```bash
+# For development
+cp env.example .env.dev
+# Edit .env.dev with your development bot credentials
+
+# For production
+cp env.example .env
+# Edit .env with your production bot credentials
+```
+
+### **Running Different Environments**
+```bash
+# Local Development (uses config.test/ and .env.dev)
+npm run dev
+npm run start:dev
+
+# Production (uses src/config/ and .env)
+npm run start
+```
+
+### **Local Development Setup**
+1. Create your development bot in Discord Developer Portal
+2. Create a test Discord server
+3. Copy `env.example` to `.env.dev` and fill in your development bot credentials
+4. Update `src/config.test/` files with your test server IDs
+5. Run `setup-dev.bat` (Windows) or `./setup-dev.sh` (Linux/Mac)
+6. Start development bot with `npm run dev`
 
 ---
 

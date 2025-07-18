@@ -1,12 +1,12 @@
 import { EmbedBuilder } from 'discord.js';
-import channelsConfig from '../config/channels.json' with { type: 'json' };
+import { channelsConfig } from '../config/configLoader.js';
 
 export const logModerationAction = async (client, action, targetUser, moderator, reason, duration = null) => {
   try {
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) return;
 
-    const logChannel = await guild.channels.fetch(channelsConfig.logChannelId);
+    const logChannel = await guild.channels.fetch(channelsConfig().logChannelId);
     if (!logChannel) {
       // Only log error if log channel is missing
       console.error('Log channel not found');
@@ -46,7 +46,7 @@ export const logRoleAssignment = async (client, member, role, assignedBy = null)
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) return;
 
-    const logChannel = guild.channels.cache.get(channelsConfig.logChannelId);
+    const logChannel = guild.channels.cache.get(channelsConfig().logChannelId);
     if (!logChannel) {
       console.error('Log channel not found');
       return;
