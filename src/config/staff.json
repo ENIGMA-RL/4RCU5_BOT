@@ -1,0 +1,28 @@
+{
+  "staffRoles": [
+    {
+      "id": "1026533862316200027",
+      "name": "Founder of CNS",
+      "color": "#ff6b6b",
+      "emoji": "👑"
+    },
+    {
+      "id": "1390075310090747904", 
+      "name": "CNS Admin",
+      "color": "#ffd93d",
+      "emoji": "🛡️"
+    },
+    {
+      "id": "1390075438646165636",
+      "name": "CNS Mod", 
+      "color": "#6bcf7f",
+      "emoji": "⚡"
+    },
+    {
+      "id": "1390076652372889771",
+      "name": "CNS Helper",
+      "color": "#4dabf7", 
+      "emoji": "🤝"
+    }
+  ]
+} 

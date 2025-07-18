@@ -1,0 +1,5 @@
+{
+  "redirectUri": "http://localhost:3000/oauth/callback",
+  "scopes": ["identify", "guilds.join"],
+  "oauthUrl": "https://discord.com/api/oauth2/authorize"
+} 

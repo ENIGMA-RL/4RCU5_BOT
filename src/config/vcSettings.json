@@ -1,0 +1,10 @@
+{
+  "voiceChannelConfig": {
+    "commandPermissions": {
+      "createChannel": ["role1", "role2"],
+      "deleteChannel": ["role3"],
+      "moveChannel": ["role4", "role5"]
+    },
+    "channelCategory": "Voice Channels"
+  }
+} 

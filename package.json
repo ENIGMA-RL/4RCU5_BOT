@@ -1,0 +1,31 @@
+{
+  "name": "CNS Bot",
+  "version": "2.0.1",
+  "main": "index.js",
+  "scripts": {
+    "start": "pm2 start src/index.js --name CNSBot",
+    "stop": "pm2 stop CNSBot",
+    "reboot": "pm2 restart CNSBot",
+    "logs": "pm2 logs CNSBot",
+    "test": "jest"
+  },
+  "keywords": [],
+  "author": "ENIGMA_RL",
+  "license": "All Rights Reserved",
+  "description": "Custom bot for CNS Server",
+  "type": "module",
+  "dependencies": {
+    "better-sqlite3": "^12.2.0",
+    "bottleneck": "^2.19.5",
+    "canvas": "^3.1.2",
+    "discord.js": "^14.21.0",
+    "dotenv": "^17.2.0",
+    "express": "^4.21.2",
+    "jest": "^30.0.4",
+    "node-cron": "^4.2.1",
+    "node-fetch": "^3.3.2",
+    "pino": "^9.7.0",
+    "pm2": "^6.0.8",
+    "zod": "^3.25.76"
+  }
+}

@@ -1,0 +1,101 @@
+import { ApplicationCommandOptionType } from 'discord.js';
+import rolesConfig from '../../config/roles.json' with { type: 'json' };
+
+export const data = {
+  name: 'untimeout',
+  description: 'Removes timeout from a user (format: @username)',
+  options: [
+    {
+      name: 'user',
+      type: ApplicationCommandOptionType.String,
+      description: 'The user to remove timeout from (e.g., @username)',
+      required: true,
+    },
+  ],
+  defaultMemberPermissions: null
+};
+
+export const execute = async (interaction) => {
+  // Check if user has admin or mod permissions
+  const memberRoles = interaction.member.roles.cache;
+  const isAdmin = rolesConfig.adminRoles.some(roleId => memberRoles.has(roleId));
+  const isMod = rolesConfig.modRoles.some(roleId => memberRoles.has(roleId));
+  
+  if (!isAdmin && !isMod) {
+    await interaction.reply({
+      content: '❌ You need admin or mod permissions to use this command.',
+      flags: 64
+    });
+    return;
+  }
+
+  const input = interaction.options.getString('user');
+  
+  // Parse the input to extract user mention
+  const mentionMatch = input.match(/<@!?\d+>/);
+  if (!mentionMatch) {
+    await interaction.reply({ 
+      content: 'Please mention a user with @username.', 
+      flags: 64 
+    });
+    return;
+  }
+  
+  const userId = mentionMatch[1];
+  
+  const user = await interaction.client.users.fetch(userId).catch(() => null);
+  if (!user) {
+    await interaction.reply({ 
+      content: 'Could not find the specified user.', 
+      flags: 64 
+    });
+    return;
+  }
+  
+  const member = await interaction.guild.members.fetch(userId);
+  if (!member) {
+    await interaction.reply({ 
+      content: 'That user is not a member of this server.', 
+      flags: 64 
+    });
+    return;
+  }
+  
+  // Check if the user is timed out
+  if (!member.isCommunicationDisabled()) {
+    await interaction.reply({ 
+      content: 'That user is not currently timed out.', 
+      flags: 64 
+    });
+    return;
+  }
+  
+  // Check if the bot can timeout the user
+  if (!member.moderatable) {
+    await interaction.reply({ 
+      content: 'I cannot remove timeout from this user. They may have higher permissions than me.', 
+      flags: 64 
+    });
+    return;
+  }
+
+  try {
+    // Remove timeout
+    await member.timeout(null, `Timeout removed by ${interaction.user.tag}`);
+    
+    // Log the action
+    console.log(`Timeout removed: ${interaction.user.tag} removed timeout from ${user.tag}`);
+
+    await interaction.reply({ 
+      content: `✅ Successfully removed timeout from ${user.tag}`, 
+      flags: 64 
+    });
+
+  } catch (error) {
+    console.error('Error removing timeout:', error);
+    await interaction.reply({ 
+      content: 'Failed to remove timeout. Please check my permissions.', 
+      flags: 64 
+    });
+  }
+}; 
