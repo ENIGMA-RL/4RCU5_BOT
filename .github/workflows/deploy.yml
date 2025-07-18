@@ -29,9 +29,14 @@ jobs:
             echo "== Pulling latest changes at $(date) =="
             git pull origin main
 
-            echo "== Installing dependencies at $(date) =="
-            npm install
-            echo "== Dependencies installed at $(date) =="
+            # Only install dependencies if package.json or package-lock.json changed
+            if git diff --name-only HEAD@{1} HEAD | grep -E 'package(-lock)?\\.json'; then
+              echo "[+] Detected dependency changes. Running npm install..."
+              npm install
+            else
+              echo "[✓] No dependency changes. Skipping npm install."
+            fi
+            echo "== Dependencies step complete at $(date) =="
 
             echo "== Writing .env at $(date) =="
             echo "DISCORD_CLIENT_ID=${{ secrets.DISCORD_CLIENT_ID }}" > .env
