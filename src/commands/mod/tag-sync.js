@@ -39,7 +39,7 @@ export const execute = async (interaction) => {
       return;
     }
 
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
     
     const syncType = interaction.options.getString('type') || 'full';
     

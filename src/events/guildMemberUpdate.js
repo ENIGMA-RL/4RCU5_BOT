@@ -7,6 +7,9 @@ export const once = false;
 
 export const execute = async (oldMember, newMember) => {
   try {
+    // (Remove all console.log statements for clean production output)
+    if (oldMember.nickname !== newMember.nickname) {
+    }
     setTimeout(async () => {
       try {
         const result = await syncUserTagRole(newMember.id, newMember.guild, newMember.client);
