@@ -22,12 +22,18 @@ export const execute = async (interaction) => {
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
 
   const guild = interaction.guild;
   const roleAssignments = levelSettings.leveling.roleAssignments;
-  const persistentRoles = levelSettings.leveling.persistentRoles || [];
+  const persistentRolesConfig = levelSettings.leveling.persistentRoles || {};
   const levelRoleIds = Object.values(roleAssignments);
+  
+  // Convert persistentRoles object to array of role IDs that should be persistent
+  const persistentRoleIds = Object.entries(persistentRolesConfig)
+    .filter(([level, isPersistent]) => isPersistent)
+    .map(([level]) => roleAssignments[level])
+    .filter(Boolean);
 
   let added = 0;
   let removed = 0;
@@ -54,7 +60,7 @@ export const execute = async (interaction) => {
       if (
         member.roles.cache.has(roleId) &&
         roleId !== correctRoleId &&
-        !persistentRoles.includes(roleId)
+        !persistentRoleIds.includes(roleId)
       ) {
         await member.roles.remove(roleId, 'Level role sync');
         removed++;

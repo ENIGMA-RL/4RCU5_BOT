@@ -1,7 +1,7 @@
 import { ApplicationCommandOptionType, AttachmentBuilder } from 'discord.js';
 import fs from 'fs';
 import path from 'path';
-import rolesConfig from '../../config/roles.json' assert { type: 'json' };
+import rolesConfig from '../../config/roles.json' with { type: 'json' };
 
 export const data = {
   name: 'setbackground',

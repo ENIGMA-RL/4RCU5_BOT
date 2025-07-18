@@ -5,17 +5,22 @@ import channelsConfig from '../../config/channels.json' with { type: 'json' };
 
 
 export async function updateStaffEmbed(client, guildId, channelId) {
-  const guild = await client.guilds.fetch(guildId);
-  if (!guild) {
-    console.error('Guild not found for staff embed update.');
-    return;
-  }
+  try {
+    const guild = await client.guilds.fetch(guildId);
+    if (!guild) {
+      console.error('Guild not found for staff embed update.');
+      return;
+    }
 
-  await guild.members.fetch();
+    await guild.members.fetch();
 
-  const channel = await guild.channels.fetch(channelId);
-  if (!channel || !channel.isTextBased()) {
-    console.error('Staff channel not found or not a text channel.');
+    const channel = await guild.channels.fetch(channelId);
+    if (!channel || !channel.isTextBased()) {
+      console.error('Staff channel not found or not a text channel.');
+      return;
+    }
+  } catch (error) {
+    console.error('Error fetching guild or channel for staff embed:', error);
     return;
   }
 
