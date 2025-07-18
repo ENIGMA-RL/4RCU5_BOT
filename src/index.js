@@ -109,9 +109,23 @@ client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
   console.log(`Environment: ${getEnvironment()}`);
   setPresence(client);
+  
+  // Log all available guilds for debugging
+  console.log('Available guilds:');
+  client.guilds.cache.forEach(g => {
+    console.log(`  - ${g.name} (${g.id})`);
+  });
+  
   const GUILD_ID = process.env.GUILD_ID;
   console.log('Using GUILD_ID from environment:', GUILD_ID);
-  const guild = client.guilds.cache.get(GUILD_ID);
+  let guild = client.guilds.cache.get(GUILD_ID);
+  
+  // If the specified guild is not found, use the first available guild
+  if (!guild && client.guilds.cache.size > 0) {
+    guild = client.guilds.cache.first();
+    console.log(`⚠️  Guild ${GUILD_ID} not found, using first available guild: ${guild.name} (${guild.id})`);
+  }
+  
   if (guild) {
     console.log(`Connected to guild: ${guild.name} (${guild.id})`);
     // Fetch all members to ensure we have complete member cache

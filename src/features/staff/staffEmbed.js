@@ -83,7 +83,13 @@ export async function updateStaffEmbed(client, guildId, channelId) {
 }
 
 export async function refreshStaffEmbed(client) {
-  const guildId = rolesConfig().tagGuildId;
+  // Get the guild ID from the client's guilds
+  const guild = client.guilds.cache.first();
+  if (!guild) {
+    console.error('[StaffEmbed] No guilds available for refresh');
+    return;
+  }
+  const guildId = guild.id;
   const channelId = channelsConfig().staffChannelId;
   await updateStaffEmbed(client, guildId, channelId);
 }
