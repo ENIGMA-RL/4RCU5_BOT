@@ -60,3 +60,6 @@ coverage/
 /coverage/ 
 
 config.test/ 
+
+# CNS Bot database
+src/database/bot.db 
