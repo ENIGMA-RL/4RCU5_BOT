@@ -20,13 +20,13 @@ const channelsConfig = JSON.parse(fs.readFileSync('./src/config/channels.json', 
 dotenv.config();
 
 // Initialize the Discord client
-const client = new Client({ 
+const client = new Client({
   intents: [
-    GatewayIntentBits.Guilds, 
-    GatewayIntentBits.GuildMessages, 
-    GatewayIntentBits.GuildVoiceStates,
-    GatewayIntentBits.GuildMembers
-  ] 
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers, // REQUIRED for member updates!
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.GuildVoiceStates
+  ]
 });
 
 // Initialize commands collection
@@ -48,6 +48,65 @@ initializeBot();
 console.log('🔍 Importing scheduleStatsUpdate and scheduleTagRoleSync');
 
 // Event listener for when the bot is ready
+client.on('guildMemberUpdate', (oldMember, newMember) => {
+  console.log('guildMemberUpdate event fired');
+  if (oldMember.nickname !== newMember.nickname) {
+    console.log(`${oldMember.user.tag} changed nickname from "${oldMember.nickname}" to "${newMember.nickname}"`);
+  }
+});
+
+client.on('raw', async (packet) => {
+  if (packet.t === 'GUILD_MEMBER_UPDATE') {
+    const user = packet.d.user;
+    const tagData = user?.primary_guild;
+    const guildId = packet.d.guild_id;
+    const userId = user.id;
+
+    if (!tagData) return;
+
+    const isUsingTag = tagData.identity_enabled && tagData.identity_guild_id === guildId;
+
+    const guild = client.guilds.cache.get(guildId);
+    if (!guild) {
+      console.error('Guild not found in cache.');
+      return;
+    }
+
+    // Try to fetch member if not cached
+    let member = guild.members.cache.get(userId);
+    if (!member) {
+      try {
+        member = await guild.members.fetch(userId);
+      } catch (err) {
+        console.error('Member not found in guild:', err);
+        return;
+      }
+    }
+
+    const roleId = '1389859132198096946'; // CNS Official role
+
+    try {
+      if (isUsingTag) {
+        if (!member.roles.cache.has(roleId)) {
+          await member.roles.add(roleId, 'User enabled server tag');
+        }
+      } else {
+        if (member.roles.cache.has(roleId)) {
+          await member.roles.remove(roleId, 'User disabled server tag');
+        }
+      }
+    } catch (err) {
+      console.error('Error updating CNS Official role:', err);
+    }
+
+    // Update stats after role change using the count of members with the CNS Official role
+    const membersWithRole = guild.members.cache.filter(m => m.roles.cache.has(roleId)).size;
+    if (typeof updateStats === 'function') {
+      await updateStats(client, guild, membersWithRole);
+    }
+  }
+});
+
 client.once('ready', async () => {
   console.log(`Logged in as ${client.user.tag}!`);
   setPresence(client);

@@ -14,27 +14,19 @@ export const execute = async (member) => {
     // Log the action
     logAction(`New member joined: ${member.user.tag}`);
     
-    // Send welcome message to log channel
-    const logChannel = await member.guild.channels.fetch(channelsConfig.logChannelId).catch(() => null);
-    if (logChannel && logChannel.isTextBased()) {
-      const welcomeEmbed = new EmbedBuilder()
-        .setTitle('👋 Welcome to CNS!')
-        .setDescription(`**${member.user.tag}** (${member.id}) has joined the server!`)
-        .setColor('#00ff00')
-        .setTimestamp()
-        .setThumbnail(member.user.displayAvatarURL({ dynamic: true }));
-      
-      await logChannel.send({ embeds: [welcomeEmbed] });
+    // Send welcome message to welcome channel
+    const welcomeChannel = await member.guild.channels.fetch(channelsConfig.welcomeChannelId).catch(() => null);
+    if (welcomeChannel && welcomeChannel.isTextBased()) {
+      await welcomeChannel.send({ content: `${member} Joined CNS` });
     }
     
-    // Assign default role if configured
-    if (rolesConfig.defaultRole) {
-      try {
-        await member.roles.add(rolesConfig.defaultRole, 'New member default role');
-        console.log(`✅ Assigned default role to ${member.user.tag}`);
-      } catch (error) {
-        console.error(`❌ Error assigning default role to ${member.user.tag}:`, error);
-      }
+    // Assign CNS role to new member
+    const CNS_ROLE_ID = '1026533888677388309';
+    try {
+      await member.roles.add(CNS_ROLE_ID, 'New member CNS role');
+      console.log(`✅ Assigned CNS role to ${member.user.tag}`);
+    } catch (error) {
+      console.error(`❌ Error assigning CNS role to ${member.user.tag}:`, error);
     }
     
     // Update stats when a member joins

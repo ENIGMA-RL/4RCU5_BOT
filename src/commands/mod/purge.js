@@ -52,7 +52,7 @@ export const execute = async (interaction) => {
       ? '⚠️ Are you sure you want to delete **ALL** messages in this channel?'
       : `⚠️ Are you sure you want to delete the last **${count}** messages in this channel?`,
     components: [row],
-    ephemeral: true
+    flags: 64
   });
 
   // Wait for button interaction

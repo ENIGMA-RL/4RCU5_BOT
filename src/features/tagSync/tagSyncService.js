@@ -136,7 +136,7 @@ export async function syncAllUserTags(guild, client) {
     let errorCount = 0;
 
     // Process users in batches to avoid rate limits
-    const batchSize = 5;
+    const batchSize = 2; // Lower batch size for less rate limiting
     const memberArray = Array.from(members.values());
     
     for (let i = 0; i < memberArray.length; i += batchSize) {
@@ -152,6 +152,11 @@ export async function syncAllUserTags(guild, client) {
           }
           return result;
         } catch (error) {
+          // Handle 429 errors
+          if (error.response && error.response.status === 429) {
+            const retryAfter = error.response.headers['retry-after'] || 1;
+            await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+          }
           errorCount++;
           console.error(`Error processing user ${member.id}:`, error);
           return { 
@@ -165,9 +170,9 @@ export async function syncAllUserTags(guild, client) {
       const batchResults = await Promise.all(batchPromises);
       results.push(...batchResults);
       
-      // Add delay between batches to respect rate limits
+      // Add short delay between batches to respect rate limits
       if (i + batchSize < memberArray.length) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise(resolve => setTimeout(resolve, 500)); // 0.5 seconds
       }
     }
 
@@ -217,6 +222,13 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
         },
       });
 
+      if (userResponse.status === 429) {
+        const retryAfter = userResponse.headers.get('retry-after') || 1;
+        console.warn(`Rate limited. Retrying after ${retryAfter} seconds.`);
+        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+
       if (!userResponse.ok) {
         console.warn(`Could not fetch user data for ${member.user.tag}: ${userResponse.status}`);
         continue;
@@ -250,6 +262,8 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
     } catch (error) {
       console.error(`Error processing member ${member.user.tag}:`, error);
     }
+    // Add short delay between each user to avoid rate limits
+    await new Promise(resolve => setTimeout(resolve, 500)); // 0.5 seconds
   }
 
   // Update the existing stats embed with the new tag count

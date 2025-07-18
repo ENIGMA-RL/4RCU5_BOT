@@ -18,12 +18,12 @@ export const execute = async (interaction) => {
   const newOwner = interaction.options.getUser('user');
   const channel = interaction.member.voice.channel;
   if (!channel) {
-    await interaction.reply({ content: 'You need to be in a voice channel to transfer ownership.', ephemeral: true });
+    await interaction.reply({ content: 'You need to be in a voice channel to transfer ownership.', flags: 64 });
     return;
   }
   await channel.fetch();
   await channel.guild.members.fetch();
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
   if (getChannelOwnerId(channel) !== interaction.member.id) {
     await interaction.editReply({ content: '❌ Only the channel owner can use this command.' });
     return;

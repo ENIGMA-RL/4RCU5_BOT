@@ -23,7 +23,7 @@ export async function updateStats(client, guildId, channelId) {
     const botCount = guild.members.cache.filter(member => member.user.bot).size;
     const humanMembers = totalMembers - botCount;
 
-    // Calculate CNS tags count (members with server tag role)
+    // Calculate CNS tags count (members with CNS Official role)
     const cnsOfficialRole = await guild.roles.fetch(rolesConfig.cnsOfficialRole);
     const cnsTagsCount = cnsOfficialRole ? cnsOfficialRole.members.size : 0;
 

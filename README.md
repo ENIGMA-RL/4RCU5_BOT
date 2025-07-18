@@ -10,7 +10,8 @@
 
 * ✅ **Slash Commands** — Clean `/say` messaging system with role-based access
 * 📊 **Server Stats Tracker** — Updates a stats embed with member count, boost count, and CNS tag usage
-* 🧬 **Tag Intelligence** — Real-time server tag synchronization using Discord API
+* 🧬 **Tag Intelligence** — Fetches real-time `identity_enabled` data for server tag tracking
+* 👮 **Automod** — Blocks messages containing Discord invite links and notifies the user in private
 * 👻 **Ghost Mode** — Replies with ephemeral confirmations, keeping command use clean
 * 🎮 **Leveling System** — XP and level tracking with role assignments
 * 🎤 **Voice Channel Management** — Dynamic voice channels with limits and permissions
@@ -185,9 +186,10 @@ Automatic staff embed updates and role synchronization:
 - `/remove` — Remove a role from a user
 
 ### **Developer Commands**
+- `/purge` — Deletes all messages from the current channel (CNS Developer only)
+- `/setbackground` — Upload a background image for rank cards (CNS Developer only)
 - `/tag-sync` — Manually sync CNS tag roles (CNS Developer only)
-- `/refreshstaff` — Refresh staff embed
-- `/refreshstats` — Refresh stats embed
+- `/migrate-message-xp` — Count all messages per user and update message XP accordingly (CNS Developer only)
 
 ---
 

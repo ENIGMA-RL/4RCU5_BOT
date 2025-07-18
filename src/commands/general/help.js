@@ -36,7 +36,8 @@ export const execute = async (interaction) => {
 
     embed.addFields({
       name: '📋 General Commands',
-      value: generalCommands.map(cmd => `**${cmd.name}** - ${cmd.description}`).join('\n'),
+      value: generalCommands.map(cmd => `**${cmd.name}** - ${cmd.description}`).join('\n') +
+        '\n\n*Automod: Messages containing Discord invite links will be automatically deleted and the user will be notified in private.*',
       inline: false
     });
 
@@ -101,7 +102,8 @@ export const execute = async (interaction) => {
       const devCommands = [
         { name: '/purge', description: 'Deletes all messages from the current channel (CNS Developer only)' },
         { name: '/setbackground', description: 'Upload a background image for rank cards (CNS Developer only)' },
-        { name: '/tag-sync', description: 'Manually sync CNS tag roles based on tag guild membership (CNS Developer only)' }
+        { name: '/tag-sync', description: 'Manually sync CNS tag roles based on tag guild membership (CNS Developer only)' },
+        { name: '/migrate-message-xp', description: 'DEV ONLY: Count all messages per user and update message XP accordingly' }
       ];
       embed.addFields({
         name: '🛠️ Developer Commands',

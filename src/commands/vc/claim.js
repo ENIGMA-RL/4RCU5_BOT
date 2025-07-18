@@ -9,12 +9,12 @@ export const data = {
 export const execute = async (interaction) => {
   const channel = interaction.member.voice.channel;
   if (!channel) {
-    await interaction.reply({ content: 'You need to be in a voice channel to claim ownership.', ephemeral: true });
+    await interaction.reply({ content: 'You need to be in a voice channel to claim ownership.', flags: 64 });
     return;
   }
   await channel.fetch();
   await channel.guild.members.fetch();
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
   // Prevent claiming if there is already an owner
   if (getChannelOwnerId(channel)) {
     await interaction.editReply({ content: 'This channel already has an active owner.' });

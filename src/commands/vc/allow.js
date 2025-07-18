@@ -18,13 +18,13 @@ export const execute = async (interaction) => {
   const channel = interaction.member.voice.channel;
   const user = interaction.options.getUser('user');
   if (!channel) {
-    await interaction.reply({ content: 'You need to be in a voice channel to use this command.', ephemeral: true });
+    await interaction.reply({ content: 'You need to be in a voice channel to use this command.', flags: 64 });
     return;
   }
   if (getChannelOwnerId(channel) !== interaction.member.id) {
-    await interaction.reply({ content: '❌ Only the channel owner can use this command.', ephemeral: true });
+    await interaction.reply({ content: '❌ Only the channel owner can use this command.', flags: 64 });
     return;
   }
   await channel.permissionOverwrites.edit(user.id, { [PermissionsBitField.Flags.Connect]: true });
-  await interaction.reply({ content: `✅ ${user.username} is now allowed to join your channel.`, ephemeral: true });
+  await interaction.reply({ content: `✅ ${user.username} is now allowed to join your channel.`, flags: 64 });
 }; 
