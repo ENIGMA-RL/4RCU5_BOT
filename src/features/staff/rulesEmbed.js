@@ -61,7 +61,10 @@ We’re here for CNS and The Finals, not your mixtape or crypto coin.
 You know who you are. This ain't your playground.
 
 If you need any help or assistance please tag <@&${rolesConfig().staffRole}>${asciiArt}`)
-      .setFooter({ text: 'Last updated' })
+      .setFooter({ 
+        text: '4RCU5', 
+        iconURL: client.user.displayAvatarURL() 
+      })
       .setTimestamp();
 
     // Find the most recent rules embed in the channel

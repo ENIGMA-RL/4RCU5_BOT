@@ -66,8 +66,11 @@ export async function updateStaffEmbed(client, guildId, channelId) {
       });
     }
 
-    // Add last updated footer
-    embed.setFooter({ text: 'Last updated' });
+    // Add last updated footer with avatar
+    embed.setFooter({ 
+      text: '4RCU5', 
+      iconURL: client.user.displayAvatarURL() 
+    });
 
     // Find the most recent staff embed in the channel
     const messages = await channel.messages.fetch({ limit: 10 });

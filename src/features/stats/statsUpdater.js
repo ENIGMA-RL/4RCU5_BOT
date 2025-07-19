@@ -38,6 +38,10 @@ export async function updateStats(client, guildId, channelId) {
         { name: '💜 CNS Tags', value: `\`${cnsTagsCount}\``, inline: false },
         { name: '💎 Server Boosts', value: `\`${boostCount}\``, inline: false }
       )
+      .setFooter({ 
+        text: '4RCU5', 
+        iconURL: client.user.displayAvatarURL() 
+      })
       .setTimestamp();
 
     // Find existing stats message
