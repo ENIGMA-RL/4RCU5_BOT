@@ -1,6 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
+import { rolesConfig, channelsConfig } from '../../config/configLoader.js';
 import { syncTagRolesFromGuild } from '../tagSync/tagSyncService.js';
 
 // Function to update server stats
@@ -24,7 +23,7 @@ export async function updateStats(client, guildId, channelId) {
     const humanMembers = totalMembers - botCount;
 
     // Calculate CNS tags count (members with CNS Official role)
-    const cnsOfficialRole = await guild.roles.fetch(rolesConfig.cnsOfficialRole);
+    const cnsOfficialRole = await guild.roles.fetch(rolesConfig().cnsOfficialRole);
     const cnsTagsCount = cnsOfficialRole ? cnsOfficialRole.members.size : 0;
 
     // Get server boost count
@@ -39,6 +38,10 @@ export async function updateStats(client, guildId, channelId) {
         { name: '💜 CNS Tags', value: `\`${cnsTagsCount}\``, inline: false },
         { name: '💎 Server Boosts', value: `\`${boostCount}\``, inline: false }
       )
+      .setFooter({ 
+        text: '4RCU5', 
+        iconURL: client.user.displayAvatarURL() 
+      })
       .setTimestamp();
 
     // Find existing stats message
@@ -95,7 +98,7 @@ export async function scheduleTagRoleSync(client) {
       if (result) {
         console.log(`✅ Periodic tag sync completed. Members with tag: ${result.count}, Roles added: ${result.updated}, Roles removed: ${result.removed}`);
         // Update stats after successful sync
-        await updateStats(client, guild.id, channelsConfig.statsChannelId);
+        await updateStats(client, guild.id, channelsConfig().statsChannelId);
       } else {
         console.error('❌ Periodic tag sync failed: No result returned');
       }

@@ -1,7 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
-import staffConfig from '../../config/staff.json' with { type: 'json' };
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
+import { staffConfig, rolesConfig, channelsConfig } from '../../config/configLoader.js';
 
 
 export async function updateStaffEmbed(client, guildId, channelId) {
@@ -48,7 +46,7 @@ export async function updateStaffEmbed(client, guildId, channelId) {
       .setColor('#b544ee')
       .setTimestamp();
 
-    for (const roleConfig of staffConfig.staffRoles) {
+    for (const roleConfig of staffConfig().staffRoles) {
       const role = await guild.roles.fetch(roleConfig.id);
       if (!role) {
         console.error(`Staff role ${roleConfig.id} not found.`);
@@ -68,8 +66,11 @@ export async function updateStaffEmbed(client, guildId, channelId) {
       });
     }
 
-    // Add last updated footer
-    embed.setFooter({ text: 'Last updated' });
+    // Add last updated footer with avatar
+    embed.setFooter({ 
+      text: '4RCU5', 
+      iconURL: client.user.displayAvatarURL() 
+    });
 
     // Find the most recent staff embed in the channel
     const messages = await channel.messages.fetch({ limit: 10 });
@@ -85,8 +86,14 @@ export async function updateStaffEmbed(client, guildId, channelId) {
 }
 
 export async function refreshStaffEmbed(client) {
-  const guildId = rolesConfig.tagGuildId;
-  const channelId = channelsConfig.staffChannelId;
+  // Get the guild ID from the client's guilds
+  const guild = client.guilds.cache.first();
+  if (!guild) {
+    console.error('[StaffEmbed] No guilds available for refresh');
+    return;
+  }
+  const guildId = guild.id;
+  const channelId = channelsConfig().staffChannelId;
   await updateStaffEmbed(client, guildId, channelId);
 }
 

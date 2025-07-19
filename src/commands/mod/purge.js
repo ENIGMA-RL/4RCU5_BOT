@@ -1,5 +1,5 @@
 import { ApplicationCommandOptionType, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'purge',
@@ -20,7 +20,7 @@ export const data = {
 export const execute = async (interaction) => {
   // Only allow CNS Developer role
   const memberRoles = interaction.member.roles.cache;
-  const isCnsDev = Array.from(memberRoles.keys()).includes(rolesConfig.cnsDeveloperRole);
+  const isCnsDev = Array.from(memberRoles.keys()).includes(rolesConfig().cnsDeveloperRole);
   if (!isCnsDev) {
     await interaction.reply({
       content: '❌ Only users with the CNS Developer role can use this command.',

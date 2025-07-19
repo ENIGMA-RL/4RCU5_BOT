@@ -1,5 +1,5 @@
 import { EmbedBuilder, ApplicationCommandOptionType } from 'discord.js';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'help',
@@ -12,12 +12,12 @@ export const execute = async (interaction) => {
   try {
     const memberRoles = interaction.member.roles.cache;
     
-    const hasModRole = rolesConfig.sayCommandRoles.some(role => memberRoles.has(role));
+    const hasModRole = rolesConfig().sayCommandRoles.some(role => memberRoles.has(role));
     
     // Check specific roles for different permission levels using config
-    const isAdmin = rolesConfig.adminRoles.some(roleId => memberRoles.has(roleId));
-    const isMod = rolesConfig.modRoles.some(roleId => memberRoles.has(roleId));
-    const isHelper = memberRoles.has(rolesConfig.helperRole);
+    const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
+    const isMod = rolesConfig().modRoles.some(roleId => memberRoles.has(roleId));
+    const isHelper = memberRoles.has(rolesConfig().helperRole);
     
     // Create embed based on user's role level
     const embed = new EmbedBuilder()
@@ -98,7 +98,7 @@ export const execute = async (interaction) => {
     }
 
     // Developer Commands (only for CNS Developer role)
-    const isDev = memberRoles.has(rolesConfig.cnsDeveloperRole);
+    const isDev = memberRoles.has(rolesConfig().cnsDeveloperRole);
     if (isDev) {
       const devCommands = [
         { name: '/purge', description: 'Deletes all messages from the current channel (CNS Developer only)' },

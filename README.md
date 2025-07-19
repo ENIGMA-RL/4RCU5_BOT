@@ -1,203 +1,140 @@
-# 🤖 4RCU5 — The CNS Discord Bot
+# 4RCU5 — CNS Discord Bot
 
-4RCU5 is a custom-built Discord bot for the CNS server, crafted for our lore-rich hacker community. Built with Node.js and Discord.js, the bot supports slash commands, real-time updates, and more.
 
-> 🧠 Born from corrupted SYS$HORIZON protocols and stabilized with rogue VAIIYA code, 4RCU5 watches the cracks in the network...
+## Features
 
----
+### Leveling System
+- Message and voice XP tracking
+- Automatic role assignment based on levels
+- Configurable role persistence
+- Leaderboard and rank display
+- Custom rank card backgrounds
 
-## ⚙️ Features
+### Voice Channel Management
+- Temporary channel creation
+- User permissions (lock, limit, rename)
+- Automatic channel cleanup
+- Ownership transfer system
 
-* ✅ **Slash Commands** — Clean `/say` messaging system with role-based access
-* 📊 **Server Stats Tracker** — Updates a stats embed with member count, boost count, and CNS tag usage
-* 🧬 **Tag Intelligence** — Fetches real-time `identity_enabled` data for server tag tracking
-* 👮 **Automod** — Blocks messages containing Discord invite links and notifies the user in private
-* 👻 **Ghost Mode** — Replies with ephemeral confirmations, keeping command use clean
-* 🎮 **Leveling System** — XP and level tracking with role assignments
-* 🎤 **Voice Channel Management** — Dynamic voice channels with limits and permissions
-* 🛡️ **Moderation Tools** — Ban, kick, timeout, and purge commands
-* 📈 **Staff Management** — Automatic staff embed updates and role synchronization
-* 🧩 **Ready for Expansion** — Modular command support for future CNS utilities and lore events
+### Moderation Tools
+- Ban, kick, timeout commands
+- Bulk message deletion
+- Automatic invite link blocking
+- Action logging to designated channels
+- Role-based permission system
 
----
+### Tag Synchronization
+- Real-time role updates
+- Periodic verification (5-minute intervals)
+- Discord API integration for tag status
+- Manual sync commands for admins
 
-## 📦 Tech Stack
+### Staff Management
+- Auto-updating staff embeds
+- Role synchronization across server
+- Hierarchical permission system
 
-* Discord.js v14
-* Node.js 18+
-* `dotenv` for environment configuration
-* `better-sqlite3` for database management
-* `node-fetch` for Discord API requests
+## Setup
 
----
+### Installation
+```bash
+git clone https://github.com/ENIGMA-RL/4RCU5_BOT.git
+cd 4RCU5_BOT
+npm install
+```
 
-## 🚀 Getting Started
+### Configuration
+```bash
+cp env.example .env
+# Edit .env with bot token and client ID
+```
 
-### **Prerequisites**
-- Node.js 18+ installed
-- Discord Bot Token
-- Discord Application with proper permissions
+Required configuration files in `src/config/`:
+- `roles.json` - Role IDs and level assignments
+- `channels.json` - Channel IDs for logs and features
+- `levelSettings.json` - XP thresholds and role mappings
+- `bot.json` - Bot settings
+- `staff.json` - Staff role definitions
+- `vcSettings.json` - Voice channel settings
+- `events.json` - Event configurations
 
-### **Installation**
+### Running
+```bash
+npm run start  # Production
+npm run dev    # Development
+```
 
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/ENIGMA-RL/4RCU5_BOT.git
-   cd 4RCU5_BOT
-   ```
+## Commands
 
-2. **Install dependencies**
-   ```bash
-   npm install
-   ```
+### General (5)
+- `/help`, `/info`, `/ping`, `/say`, `/refreshstats`
 
-3. **Configure environment variables**
-   Create a `.env` file in the root directory (this file is gitignored):
-   ```env
-   DISCORD_TOKEN=your_bot_token_here
-   DISCORD_CLIENT_ID=your_client_id_here
-   # Add any other required environment variables here
-   ```
-   > **Note:** Never commit your `.env` file. It is ignored by git for security.
+### Leveling (5)
+- `/levels`, `/leaderboard`, `/rank`, `/setbackground`, `/synclevelroles`
 
-4. **Configure bot settings**
-   - Update files in `src/config/` (such as `roles.json`, `channels.json`, `levelSettings.json`) with your server-specific IDs and preferences.
-   - For local/test configurations, you may use a `config.test/` folder. This folder is gitignored and can be used for local overrides or test configs.
+### Voice Channels (7)
+- `/limit`, `/lock`, `/unlock`, `/rename`, `/transfer`, `/claim`, `/allow`
 
-5. **Start the bot**
-   ```bash
-   npm run start
-   ```
+### Moderation (9)
+- `/ban`, `/unban`, `/kick`, `/timeout`, `/untimeout`, `/purge`, `/setxp`, `/tag-sync`, `/migrate-message-xp`
 
-### **Required Bot Permissions**
-- `GUILD_MEMBERS` — Member management and role assignment
-- `MANAGE_ROLES` — Role assignment and management
-- `MANAGE_CHANNELS` — Voice channel management
-- `SEND_MESSAGES` — Command responses
-- `EMBED_LINKS` — Rich embeds
-- `ATTACH_FILES` — File uploads
-- `USE_EXTERNAL_EMOJIS` — Custom emojis
-- `MANAGE_MESSAGES` — Moderation commands
+### Role Management (2)
+- `/assign`, `/remove`
 
----
+## Technical Details
 
-## 🔒 Environment & Configuration
+### Architecture
+- **28 Commands** across 5 categories
+- **6 Event Handlers** for real-time processing
+- **10 Feature Modules** for core functionality
+- **7 Configuration Files** for customization
+- **SQLite Database** for data persistence
 
-- **.env**: Store secrets and environment-specific variables here. This file is ignored by git.
-- **src/config/**: Store general configuration files (IDs, settings, etc.).
-- **config.test/**: (Optional) Use this folder for local/test config overrides. It is gitignored and will not be committed.
+### Project Structure
+```
+src/
+├── commands/          # Command handlers
+│   ├── general/      # Basic commands
+│   ├── levels/       # Leveling commands
+│   ├── mod/          # Moderation tools
+│   ├── roles/        # Role management
+│   └── vc/           # Voice channel controls
+├── config/           # Configuration files
+├── database/         # Database operations
+├── events/           # Discord event handlers
+├── features/         # Core features
+├── loaders/          # Command/event loading
+└── utils/            # Utility functions
+```
 
----
+### Database
+- User XP and level tracking
+- Voice channel management
+- Server statistics
 
-## 🔧 Configuration
+### Events
+- Member join/leave/update
+- Message creation
+- Voice state changes
+- Interaction handling
 
-### **Role Configuration** (`src/config/roles.json`)
-- Admin, mod, and member role IDs
-- Level role assignments
-- Tag guild and official role IDs
-- Command permissions
+## Requirements
 
-### **Channel Configuration** (`src/config/channels.json`)
-- Welcome, stats, staff, and log channels
-- Rules and level check channels
+### Bot Permissions
+- `GUILD_MEMBERS`, `MANAGE_ROLES`, `MANAGE_CHANNELS`
+- `SEND_MESSAGES`, `EMBED_LINKS`, `ATTACH_FILES`
+- `USE_EXTERNAL_EMOJIS`, `MANAGE_MESSAGES`
 
-### **Level Settings** (`src/config/levelSettings.json`)
-- XP thresholds and role assignments
-- Persistent role settings
-- Level-up role mappings
+### Environment
+- Node.js 18+
+- Discord.js v14
+- better-sqlite3
+- dotenv
 
----
+## Development
 
-## 📊 Features in Detail
+Commands auto-register on startup. To add new commands:
+1. Create file in `src/commands/[category]/`
+2. Export `data` (command definition) and `execute` (handler)
+3. Supports role-based permissions and cooldowns
 
-### **Tag Role Synchronization**
-The bot automatically syncs CNS Official roles based on users' server tag status:
-
-- **Real-time Sync**: Monitors `guildMemberUpdate` events for instant role updates
-- **Periodic Sync**: Runs every 5 minutes to ensure all users are properly synced
-- **Manual Sync**: `/tag-sync` command for developers to manually trigger syncs
-- **Bot Token Approach**: Uses Discord API with bot token to check `primary_guild.identity_enabled`
-
-### **Leveling System**
-Comprehensive XP and leveling system with voice channel support:
-
-- **Message XP**: Users gain XP for sending messages
-- **Voice XP**: Users gain XP for being in voice channels
-- **Role Assignments**: Automatic role assignment based on level thresholds
-- **Leaderboards**: `/leaderboard` command to view top users
-- **Rank Cards**: `/rank` command with custom background support
-
-### **Voice Channel Management**
-Dynamic voice channel system with advanced features:
-
-- **Auto-creation**: Temporary voice channels created on demand
-- **Permission Control**: `/lock`, `/unlock`, `/limit` commands
-- **Channel Transfer**: `/transfer` command to give ownership
-- **Renaming**: `/rename` command for custom channel names
-
-### **Moderation Tools**
-Comprehensive moderation system with logging:
-
-- **Ban/Unban**: `/ban` and `/unban` commands
-- **Kick**: `/kick` command for temporary removal
-- **Timeout**: `/timeout` command for temporary mutes
-- **Purge**: `/purge` command to delete multiple messages
-- **Logging**: All moderation actions logged to designated channel
-
-### **Staff Management**
-Automatic staff embed updates and role synchronization:
-
-- **Staff Embed**: Automatically updates when staff roles change
-- **Rules Embed**: Dynamic rules display with role-based visibility
-- **Role Sync**: Automatic synchronization of staff roles across the server
-
----
-
-## 🎮 Commands
-
-### **General Commands**
-- `/help` — Display available commands
-- `/info` — Show bot information
-- `/ping` — Check bot latency
-- `/say` — Send a message as the bot (moderator only)
-
-### **Leveling Commands**
-- `/levels` — Show leveling information
-- `/leaderboard` — Display top users by XP
-- `/rank` — Show user's rank card
-- `/setbackground` — Set custom rank background (moderator only)
-
-### **Voice Channel Commands**
-- `/limit` — Set voice channel user limit
-- `/lock` — Lock voice channel
-- `/unlock` — Unlock voice channel
-- `/rename` — Rename voice channel
-- `/transfer` — Transfer voice channel ownership
-
-### **Moderation Commands**
-- `/ban` — Ban a user
-- `/unban` — Unban a user
-- `/kick` — Kick a user
-- `/timeout` — Timeout a user
-- `/purge` — Delete multiple messages
-
-### **Role Management**
-- `/assign` — Assign a role to a user
-- `/remove` — Remove a role from a user
-
-### **Developer Commands**
-- `/purge` — Deletes all messages from the current channel (CNS Developer only)
-- `/setbackground` — Upload a background image for rank cards (CNS Developer only)
-- `/tag-sync` — Manually sync CNS tag roles (CNS Developer only)
-- `/migrate-message-xp` — Count all messages per user and update message XP accordingly (CNS Developer only)
-
----
-
-## 🔄 Tag Sync System
-
-The bot uses Discord's API to check users' server tag status without requiring OAuth tokens:
-
-1. **API Check**: Fetches user data using bot token from `https://discord.com/api/users/{userId}`
-2. **Tag Detection**: Checks `primary_guild.identity_enabled` and `identity_guild_id`
-3. **Role Management**: Automatically assigns/removes CNS Official role based on tag status
-4. **Real-time Updates**: Responds to `

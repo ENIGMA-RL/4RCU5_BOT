@@ -8,11 +8,9 @@ import {
   getCurrentLevelXP,
   getTopUsers
 } from '../../database/db.js';
-import levelSettings from '../../config/levelSettings.json' with { type: 'json' };
-import channelsConfig from '../../config/channels.json' with { type: 'json' };
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
+import { levelSettingsConfig, channelsConfig, rolesConfig } from '../../config/configLoader.js';
 
-const { leveling } = levelSettings;
+const { leveling } = levelSettingsConfig();
 
 // XP tracking (no cooldowns)
 
@@ -79,22 +77,23 @@ async function handleLevelUp(member, newLevel, type) {
     const userId = member.id;
     const user = getUser(userId);
 
-    // Get current levels (handle missing properties)
-    const currentMessageLevel = user.level || 0;
-    const currentVoiceLevel = user.voice_level || 0;
+    // Get current XP (handle missing properties)
+    const currentMessageXP = user.xp || 0;
+    const currentVoiceXP = user.voice_xp || 0;
 
-    // Calculate total level (message level + voice level)
-    const totalLevel = currentMessageLevel + currentVoiceLevel;
+    // Calculate total XP and total level
+    const totalXP = currentMessageXP + currentVoiceXP;
+    const totalLevel = calculateLevel(totalXP, leveling.xpThresholds);
 
     // Update levels in database
     if (type === 'message') {
-      updateUserLevel(userId, newLevel, currentVoiceLevel, totalLevel);
+      updateUserLevel(userId, newLevel, user.voice_level || 0, totalLevel);
     } else if (type === 'voice') {
-      updateUserLevel(userId, currentMessageLevel, newLevel, totalLevel);
+      updateUserLevel(userId, user.level || 0, newLevel, totalLevel);
     }
 
-    // Assign role if applicable
-    await assignLevelRole(member, newLevel);
+    // Assign role if applicable (based on total level)
+    await assignLevelRole(member, totalLevel);
 
     // Send level up notification if enabled
     if (user.level_up_notifications) {
@@ -107,18 +106,18 @@ async function handleLevelUp(member, newLevel, type) {
   }
 }
 
-async function assignLevelRole(member, level) {
+async function assignLevelRole(member, totalLevel) {
   try {
-    // Check if this level has a role assignment
-    const roleId = leveling.roleAssignments[level.toString()];
+    // Check if this total level has a role assignment
+    const roleId = leveling.roleAssignments[totalLevel.toString()];
     if (!roleId) {
-      return; // No role for this level
+      return; // No role for this total level
     }
 
     // Get the role
     const role = await member.guild.roles.fetch(roleId);
     if (!role) {
-      console.error(`Role ${roleId} not found for level ${level}`);
+      console.error(`Role ${roleId} not found for total level ${totalLevel}`);
       return;
     }
 
@@ -128,22 +127,22 @@ async function assignLevelRole(member, level) {
     }
 
     // Assign the role
-    await member.roles.add(role, `Level ${level} achievement`);
-    console.log(`🎭 Assigned ${role.name} to ${member.user.tag} for reaching level ${level}`);
+    await member.roles.add(role, `Total Level ${totalLevel} achievement`);
+    console.log(`🎭 Assigned ${role.name} to ${member.user.tag} for reaching total level ${totalLevel}`);
 
-    // Handle role removal based on new logic
-    await handleRoleRemoval(member, level);
+    // Handle role removal based on new logic (using total level)
+    await handleRoleRemoval(member, totalLevel);
   } catch (error) {
     console.error('Error assigning level role:', error);
   }
 }
 
-async function handleRoleRemoval(member, currentLevel) {
+async function handleRoleRemoval(member, currentTotalLevel) {
   try {
     // Get all level roles that should be checked for removal
     const levelNumbers = Object.keys(leveling.roleAssignments)
       .map(Number)
-      .filter(level => level < currentLevel)
+      .filter(level => level < currentTotalLevel)
       .sort((a, b) => b - a); // Sort descending to check highest first
 
     for (const level of levelNumbers) {
@@ -157,13 +156,13 @@ async function handleRoleRemoval(member, currentLevel) {
       
       if (!isPersistent) {
         // Find the next higher level role that should replace this one
-        const shouldRemove = shouldRemoveRole(level, currentLevel);
+        const shouldRemove = shouldRemoveRole(level, currentTotalLevel);
         
         if (shouldRemove) {
           const role = await member.guild.roles.fetch(roleId);
           if (role) {
-            await member.roles.remove(role, `Replaced by higher level role`);
-            console.log(`🗑️ Removed ${role.name} from ${member.user.tag} (level ${level} → ${currentLevel})`);
+            await member.roles.remove(role, `Replaced by higher total level role`);
+            console.log(`🗑️ Removed ${role.name} from ${member.user.tag} (total level ${level} → ${currentTotalLevel})`);
           }
         }
       }
@@ -173,11 +172,11 @@ async function handleRoleRemoval(member, currentLevel) {
   }
 }
 
-function shouldRemoveRole(roleLevel, currentLevel) {
-  // Get all level roles that are higher than the role level but lower than or equal to current level
+function shouldRemoveRole(roleLevel, currentTotalLevel) {
+  // Get all level roles that are higher than the role level but lower than or equal to current total level
   const higherLevels = Object.keys(leveling.roleAssignments)
     .map(Number)
-    .filter(level => level > roleLevel && level <= currentLevel)
+    .filter(level => level > roleLevel && level <= currentTotalLevel)
     .sort((a, b) => a - b); // Sort ascending
 
   if (higherLevels.length === 0) {

@@ -1,7 +1,6 @@
 import { ApplicationCommandOptionType } from 'discord.js';
 import fs from 'fs';
-import rolesConfig from '../../config/roles.json' with { type: 'json' };
-import levelSettings from '../../config/levelSettings.json' with { type: 'json' };
+import { rolesConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 
 export const data = {
@@ -13,7 +12,7 @@ export const data = {
 
 export const execute = async (interaction) => {
   // Restrict to CNS Developer role only
-  const devRoleId = rolesConfig.cnsDeveloperRole;
+  const devRoleId = rolesConfig().cnsDeveloperRole;
   if (!interaction.member.roles.cache.has(devRoleId)) {
     await interaction.reply({
       content: '❌ Only users with the CNS Developer role can use this command.',
@@ -25,8 +24,8 @@ export const execute = async (interaction) => {
   await interaction.deferReply({ flags: 64 });
 
   const guild = interaction.guild;
-  const roleAssignments = levelSettings.leveling.roleAssignments;
-  const persistentRolesConfig = levelSettings.leveling.persistentRoles || {};
+  const roleAssignments = levelSettingsConfig().leveling.roleAssignments;
+  const persistentRolesConfig = levelSettingsConfig().leveling.persistentRoles || {};
   const levelRoleIds = Object.values(roleAssignments);
   
   // Convert persistentRoles object to array of role IDs that should be persistent

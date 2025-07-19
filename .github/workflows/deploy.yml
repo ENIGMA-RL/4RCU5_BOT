@@ -1,4 +1,4 @@
-name: Deploy to DigitalOcean
+name: Deploy
 
 on:
   push:
@@ -29,7 +29,6 @@ jobs:
             echo "== Pulling latest changes at $(date) =="
             git pull origin main
 
-            # Only install dependencies if package.json or package-lock.json changed
             if git diff --name-only HEAD@{1} HEAD | grep -E 'package(-lock)?\\.json'; then
               echo "[+] Detected dependency changes. Running npm install..."
               npm install
