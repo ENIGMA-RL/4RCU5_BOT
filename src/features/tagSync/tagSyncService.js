@@ -18,6 +18,21 @@ export async function checkUserTagStatus(userId, client) {
       },
     });
 
+    // Handle rate limiting
+    if (userResponse.status === 429) {
+      const retryAfter = userResponse.headers.get('retry-after') || 1;
+      console.warn(`Rate limited when checking tag status for user ${userId}. Retrying after ${retryAfter} seconds.`);
+      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+      throw new Error(`Rate limited: ${userResponse.status}`);
+    }
+
+    // Handle server errors (5xx) with retry logic
+    if (userResponse.status >= 500 && userResponse.status < 600) {
+      console.warn(`Server error (${userResponse.status}) when checking tag status for user ${userId}. Retrying in 2 seconds...`);
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      throw new Error(`Server error: ${userResponse.status}`);
+    }
+
     if (!userResponse.ok) {
       throw new Error(`Failed to fetch user data: ${userResponse.status}`);
     }
@@ -180,6 +195,19 @@ export async function syncAllUserTags(guild, client) {
             const retryAfter = error.response.headers['retry-after'] || 1;
             await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
           }
+          
+          // Handle server errors (5xx)
+          if (error.message && error.message.includes('Server error: 5')) {
+            console.warn(`Server error when processing user ${member.id}. Will retry in next batch.`);
+            // Don't increment error count for server errors as they will be retried
+            return { 
+              success: false, 
+              error: error.message,
+              userId: member.id,
+              retryable: true
+            };
+          }
+          
           errorCount++;
           console.error(`Error processing user ${member.id}:`, error);
           return { 
@@ -255,6 +283,13 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
         const retryAfter = userResponse.headers.get('retry-after') || 1;
         console.warn(`Rate limited. Retrying after ${retryAfter} seconds.`);
         await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
+        continue;
+      }
+
+      // Handle server errors (5xx) with retry logic
+      if (userResponse.status >= 500 && userResponse.status < 600) {
+        console.warn(`Server error (${userResponse.status}) for ${member.user.tag}. Retrying in 2 seconds...`);
+        await new Promise(resolve => setTimeout(resolve, 2000));
         continue;
       }
 
