@@ -1,18 +1,16 @@
 // Create the initial folder structure and main bot file
 
 // Import necessary modules
-import { Client, GatewayIntentBits, EmbedBuilder, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Collection } from 'discord.js';
 import dotenv from 'dotenv';
-import cron from 'node-cron';
-import { scheduleStatsUpdate, scheduleTagRoleSync } from './features/stats/statsUpdater.js';
+import { scheduleStatsUpdate, scheduleTagRoleSync, updateStats } from './features/stats/statsUpdater.js';
 import { scheduleStaffEmbedUpdate } from './features/staff/staffEmbed.js';
 import { updateRulesEmbed } from './features/staff/rulesEmbed.js';
-import { REST, Routes } from 'discord.js';
 import { registerCommands } from './loaders/commandRegistrar.js';
 import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
 import { setPresence } from './features/presence/presenceManager.js';
-import { channelsConfig, getEnvironment, isDev } from './config/configLoader.js';
+import { channelsConfig, getEnvironment } from './config/configLoader.js';
 
 // Load environment variables
 dotenv.config();
@@ -153,7 +151,7 @@ client.once('ready', async () => {
     }, 5 * 60 * 1000);
     // Schedule the periodic tag role sync
     console.log('🔍 Calling scheduleTagRoleSync');
-    scheduleTagRoleSync(client);
+    scheduleTagRoleSync(client, guild.id);
     console.log('📊 Stats, staff embed, and tag sync systems initialized');
   } else {
     console.error('❌ Could not find guild with ID:', GUILD_ID);
@@ -163,4 +161,4 @@ client.once('ready', async () => {
 });
 
 // Export the client for use in other modules
-export default client; 
+export default client;

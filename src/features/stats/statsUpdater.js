@@ -84,15 +84,21 @@ export function scheduleStatsUpdate(client, guildId, channelId) {
 }
 
 // Periodic tag sync: every 5 minutes, sync all users' tag roles using bot token approach
-export async function scheduleTagRoleSync(client) {
+export async function scheduleTagRoleSync(client, guildId) {
   console.log('🔄 Starting periodic tag role sync interval');
   setInterval(async () => {
     try {
       console.log('🔄 Running periodic tag role sync...');
-      const guild = client.guilds.cache.get(process.env.GUILD_ID);
+      let guild = client.guilds.cache.get(guildId);
       if (!guild) {
-        console.error('❌ No guild found for periodic tag sync');
-        return;
+        // Try to fetch the guild if it's not in cache
+        try {
+          guild = await client.guilds.fetch(guildId);
+          console.log(`✅ Fetched guild ${guild.name} (${guild.id}) for tag sync`);
+        } catch (fetchError) {
+          console.error(`❌ Could not fetch guild ${guildId} for periodic tag sync:`, fetchError.message);
+          return;
+        }
       }
       const result = await syncTagRolesFromGuild(guild, client);
       if (result) {

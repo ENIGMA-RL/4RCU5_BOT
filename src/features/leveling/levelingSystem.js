@@ -8,7 +8,7 @@ import {
   getCurrentLevelXP,
   getTopUsers
 } from '../../database/db.js';
-import { levelSettingsConfig, channelsConfig, rolesConfig } from '../../config/configLoader.js';
+import { levelSettingsConfig, channelsConfig } from '../../config/configLoader.js';
 
 const { leveling } = levelSettingsConfig();
 
@@ -183,26 +183,9 @@ function shouldRemoveRole(roleLevel, currentTotalLevel) {
     return false; // No higher level roles to replace this one
   }
 
-  // Find the next immediate higher level role
-  const nextHigherLevel = higherLevels[0];
-  
-  // Check if the next higher level role is persistent
-  const nextHigherIsPersistent = leveling.persistentRoles[nextHigherLevel.toString()];
-  
-  // If the next higher level is persistent, this role should be removed
-  // If it's not persistent, we need to check if there's an even higher level that would replace it
-  if (nextHigherIsPersistent) {
-    return true;
-  }
-
-  // If the next higher level is not persistent, check if there's a higher level that would replace it
-  const evenHigherLevels = higherLevels.filter(level => level > nextHigherLevel);
-  if (evenHigherLevels.length > 0) {
-    // There's a higher level that would replace the next higher level, so this role should be removed
-    return true;
-  }
-
-  return false;
+  // If there are any higher level roles, this role should be removed
+  // (unless it's persistent, which is checked in handleRoleRemoval)
+  return true;
 }
 
 async function sendLevelUpNotification(member, level, type) {

@@ -1,5 +1,3 @@
-import { ApplicationCommandOptionType } from 'discord.js';
-import fs from 'fs';
 import { rolesConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 
@@ -46,25 +44,30 @@ export const execute = async (interaction) => {
     checked++;
     // Get user level
     const userData = await getUserLevelData(member.id);
-    const userLevel = userData?.level || 0;
-    // Find the highest role for their level
+    const userTotalLevel = userData?.totalLevel || 0;
+    
+    // Find the highest role for their total level
     let correctRoleId = null;
     for (const [level, roleId] of Object.entries(roleAssignments)) {
-      if (userLevel >= parseInt(level)) {
+      if (userTotalLevel >= parseInt(level)) {
         correctRoleId = roleId;
       }
     }
-    // Remove all level roles except persistentRoles and the correct one
+    
+    // Remove all level roles except persistent roles and the correct one
     for (const roleId of levelRoleIds) {
-      if (
-        member.roles.cache.has(roleId) &&
-        roleId !== correctRoleId &&
-        !persistentRoleIds.includes(roleId)
-      ) {
-        await member.roles.remove(roleId, 'Level role sync');
-        removed++;
+      if (member.roles.cache.has(roleId) && roleId !== correctRoleId) {
+        // Check if this role should be persistent
+        const roleLevel = Object.entries(roleAssignments).find(([level, id]) => id === roleId)?.[0];
+        const isPersistent = roleLevel ? persistentRolesConfig[roleLevel] : false;
+        
+        if (!isPersistent) {
+          await member.roles.remove(roleId, 'Level role sync');
+          removed++;
+        }
       }
     }
+    
     // Add the correct role if missing
     if (correctRoleId && !member.roles.cache.has(correctRoleId)) {
       await member.roles.add(correctRoleId, 'Level role sync');

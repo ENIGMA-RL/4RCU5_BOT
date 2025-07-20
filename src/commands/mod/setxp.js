@@ -1,6 +1,6 @@
 import { ApplicationCommandOptionType } from 'discord.js';
-import { updateUserXP, updateUserLevel, getUser, createUser } from '../../database/db.js';
-import { rolesConfig, botConfig } from '../../config/configLoader.js';
+import { updateUserXP, updateUserLevel, getUser, createUser, calculateLevel } from '../../database/db.js';
+import { rolesConfig, botConfig, levelSettingsConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'setxp',
@@ -57,9 +57,6 @@ export const execute = async (interaction) => {
     }
 
     // Calculate levels based on XP
-    const { calculateLevel } = await import('../../database/db.js');
-    const { levelSettingsConfig } = await import('../../config/configLoader.js');
-    
     const levelSettings = levelSettingsConfig();
     const messageLevel = calculateLevel(messageXP, levelSettings.leveling.xpThresholds);
     const voiceLevel = calculateLevel(voiceXP, levelSettings.leveling.xpThresholds);
