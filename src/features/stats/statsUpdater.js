@@ -4,19 +4,25 @@ import { syncTagRolesFromGuild } from '../tagSync/tagSyncService.js';
 
 // Function to update server stats
 export async function updateStats(client, guildId, channelId) {
-  const guild = await client.guilds.fetch(guildId);
-  if (!guild) {
-    console.error('Guild not found.');
-    return;
-  }
-
-  const channel = await guild.channels.fetch(channelId);
-  if (!channel) {
-    console.error('Stats channel not found.');
-    return;
-  }
-
   try {
+    // Check if client is ready
+    if (!client || !client.isReady()) {
+      console.log('Client not ready, skipping stats update');
+      return;
+    }
+
+    const guild = await client.guilds.fetch(guildId);
+    if (!guild) {
+      console.error('Guild not found.');
+      return;
+    }
+
+    const channel = await guild.channels.fetch(channelId);
+    if (!channel) {
+      console.error('Stats channel not found.');
+      return;
+    }
+
     // Calculate member count (excluding bots)
     const totalMembers = guild.memberCount;
     const botCount = guild.members.cache.filter(member => member.user.bot).size;

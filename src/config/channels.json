@@ -1,6 +1,7 @@
 {
   "welcomeChannelId": "1245021387387834408",
-  "logChannelId": "1390155604600950825",
+  "modLogChannelId": "1390155604600950825",
+  "botLogChannelId": "1395863864465162352",
   "levelCheckChannelId": "1390332994094498032",
   "statsChannelId": "1390430066923798639",
   "staffChannelId": "1390103937876627567",

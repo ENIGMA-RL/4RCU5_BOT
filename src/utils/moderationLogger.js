@@ -3,13 +3,16 @@ import { channelsConfig } from '../config/configLoader.js';
 
 export const logModerationAction = async (client, action, targetUser, moderator, reason, duration = null) => {
   try {
-    const guild = client.guilds.cache.get(process.env.GUILD_ID);
-    if (!guild) return;
+    // Get the first guild from the client (or use a specific guild ID if needed)
+    const guild = client.guilds.cache.first();
+    if (!guild) {
+      console.error('No guild found in client cache');
+      return;
+    }
 
-    const logChannel = await guild.channels.fetch(channelsConfig().logChannelId);
+    const logChannel = await guild.channels.fetch(channelsConfig().modLogChannelId);
     if (!logChannel) {
-      // Only log error if log channel is missing
-      console.error('Log channel not found');
+      console.error('Moderation log channel not found');
       return;
     }
 
@@ -46,7 +49,7 @@ export const logRoleAssignment = async (client, member, role, assignedBy = null)
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) return;
 
-    const logChannel = guild.channels.cache.get(channelsConfig().logChannelId);
+    const logChannel = guild.channels.cache.get(channelsConfig().modLogChannelId);
     if (!logChannel) {
       console.error('Log channel not found');
       return;
@@ -71,29 +74,41 @@ export const logRoleAssignment = async (client, member, role, assignedBy = null)
   }
 };
 
-const getActionColor = (action) => {
-  switch (action.toLowerCase()) {
-    case 'kick':
-      return '#ffa500'; // Orange
+// Helper function to get color based on action
+function getActionColor(action) {
+  const actionLower = action.toLowerCase();
+  switch (actionLower) {
     case 'ban':
-      return '#ff0000'; // Red
-    case 'timeout':
-      return '#ffff00'; // Yellow
-    case 'untimeout':
-      return '#00ff00'; // Green
+      return 0xff0000; // Red
     case 'unban':
-      return '#00ff00'; // Green
+      return 0x00ff00; // Green
+    case 'kick':
+      return 0xff8800; // Orange
+    case 'timeout':
+      return 0xffaa00; // Yellow
+    case 'untimeout':
+      return 0x00ff00; // Green
+    case 'warn':
+      return 0xffff00; // Yellow
     default:
-      return '#0099ff'; // Blue
+      return 0x0099ff; // Blue
   }
-};
+}
 
-const formatDuration = (minutes) => {
-  if (minutes === 0) return 'Indefinitely';
-  if (minutes < 60) return `${minutes} minutes`;
-  if (minutes < 1440) return `${Math.floor(minutes / 60)} hours`;
-  return `${Math.floor(minutes / 1440)} days`;
-};
+// Helper function to format duration
+function formatDuration(duration) {
+  if (!duration || duration <= 0) return 'Permanent';
+  
+  const seconds = Math.floor(duration / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+  
+  if (days > 0) return `${days} day(s)`;
+  if (hours > 0) return `${hours} hour(s)`;
+  if (minutes > 0) return `${minutes} minute(s)`;
+  return `${seconds} second(s)`;
+}
 
 const sendModerationDM = async (user, action, reason, duration, guildName) => {
   try {
