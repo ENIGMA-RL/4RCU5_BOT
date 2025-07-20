@@ -183,8 +183,9 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   ctx.fillText(user.username, textStartX, y);
 
   // Calculate total level and thresholds
+  const totalXP = (userData.xp || 0) + (userData.voice_xp || 0);
   for (let i = 0; i < levels.length; i++) {
-    if (userData.xp >= xpThresholds[levels[i]]) {
+    if (totalXP >= xpThresholds[levels[i]]) {
       totalLevel = levels[i];
       prevThreshold = xpThresholds[levels[i]];
       nextThreshold = xpThresholds[levels[i + 1]] || prevThreshold + 100;

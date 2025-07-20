@@ -1,4 +1,4 @@
-import { ApplicationCommandOptionType, PermissionFlagsBits } from 'discord.js';
+import { ApplicationCommandOptionType } from 'discord.js';
 import { logModerationAction } from '../../utils/moderationLogger.js';
 import { rolesConfig } from '../../config/configLoader.js';
 
