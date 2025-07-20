@@ -6,6 +6,7 @@ import dotenv from 'dotenv';
 import { scheduleStatsUpdate, scheduleTagRoleSync, updateStats } from './features/stats/statsUpdater.js';
 import { scheduleStaffEmbedUpdate } from './features/staff/staffEmbed.js';
 import { updateRulesEmbed } from './features/staff/rulesEmbed.js';
+import { checkBirthdays } from './features/birthday/birthdayManager.js';
 import { registerCommands } from './loaders/commandRegistrar.js';
 import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
@@ -160,6 +161,19 @@ client.once('ready', async () => {
     console.log('🔍 Calling scheduleTagRoleSync');
     scheduleTagRoleSync(client, guild.id);
     console.log('📊 Stats, staff embed, and tag sync systems initialized');
+    
+    // Schedule birthday checks every hour
+    console.log('🎂 Starting birthday check scheduler');
+    setInterval(async () => {
+      try {
+        await checkBirthdays(client);
+      } catch (error) {
+        console.error('Error in birthday check:', error);
+      }
+    }, 60 * 60 * 1000); // Check every hour
+    
+    // Initial birthday check
+    await checkBirthdays(client);
   } else {
     console.error('❌ Could not find guild with ID:', GUILD_ID);
   }

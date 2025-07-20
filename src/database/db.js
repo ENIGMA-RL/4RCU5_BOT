@@ -32,6 +32,19 @@ function initializeDatabase() {
     )
   `);
 
+  // Birthdays table for birthday tracking
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS birthdays (
+      user_id TEXT,
+      guild_id TEXT,
+      birth_day INTEGER NOT NULL,
+      birth_month INTEGER NOT NULL,
+      birth_year INTEGER NOT NULL,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      PRIMARY KEY (user_id, guild_id)
+    )
+  `);
+
   // Add missing columns to existing users table if they don't exist
   try {
     db.exec('ALTER TABLE users ADD COLUMN voice_level INTEGER DEFAULT 0');
