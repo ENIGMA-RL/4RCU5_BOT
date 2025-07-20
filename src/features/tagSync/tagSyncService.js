@@ -1,5 +1,4 @@
 import fetch from 'node-fetch';
-import { logRoleAssignment } from '../../utils/moderationLogger.js';
 import { rolesConfig, channelsConfig, isDev } from '../../config/configLoader.js';
 import { EmbedBuilder } from 'discord.js';
 import { logTagSync } from '../../utils/botLogger.js';
@@ -115,7 +114,6 @@ export async function syncUserTagRole(userId, guild, client) {
         // Log the role assignment
         const role = guild.roles.cache.get(cnsOfficialRoleId);
         if (role) {
-          await logRoleAssignment(guild.client, member, role, null);
           await logTagSync(guild.client, member.id, member.user.tag, 'Added', 'Server tag enabled');
         }
         

@@ -30,7 +30,8 @@ export const execute = async (interaction) => {
       { name: '/help', description: 'Shows this help menu' },
       { name: '/ping', description: 'Check bot latency' },
       { name: '/info', description: 'Get bot information' },
-      { name: '/funfact', description: 'Get a random fun fact!' },
+      { name: '/funfact', description: 'Get a random useless fun fact!' },
+      { name: '/birthday', description: 'Set your birthday to receive birthday wishes and a special role!' },
       { name: '/levels', description: 'View information about the XP system and available levels' },
       { name: '/rank', description: 'Check your level and XP' },
       { name: '/leaderboard', description: 'View server leaderboard' }
