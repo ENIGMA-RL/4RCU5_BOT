@@ -11,6 +11,7 @@ import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
 import { setPresence } from './features/presence/presenceManager.js';
 import { channelsConfig, getEnvironment } from './config/configLoader.js';
+import { logTagSync } from './utils/botLogger.js';
 
 // Load environment variables
 dotenv.config();
@@ -52,54 +53,60 @@ client.on('guildMemberUpdate', (oldMember, newMember) => {
 });
 
 client.on('raw', async (packet) => {
-  if (packet.t === 'GUILD_MEMBER_UPDATE') {
-    const user = packet.d.user;
-    const tagData = user?.primary_guild;
-    const guildId = packet.d.guild_id;
-    const userId = user.id;
+  try {
+    if (packet.t === 'GUILD_MEMBER_UPDATE') {
+      const user = packet.d.user;
+      const tagData = user?.primary_guild;
+      const guildId = packet.d.guild_id;
+      const userId = user.id;
 
-    if (!tagData) return;
+      if (!tagData) return;
 
-    const isUsingTag = tagData.identity_enabled && tagData.identity_guild_id === guildId;
+      const isUsingTag = tagData.identity_enabled && tagData.identity_guild_id === guildId;
 
-    const guild = client.guilds.cache.get(guildId);
-    if (!guild) {
-      console.error('Guild not found in cache.');
-      return;
-    }
-
-    // Try to fetch member if not cached
-    let member = guild.members.cache.get(userId);
-    if (!member) {
-      try {
-        member = await guild.members.fetch(userId);
-      } catch (err) {
-        console.error('Member not found in guild:', err);
+      const guild = client.guilds.cache.get(guildId);
+      if (!guild) {
+        console.error('Guild not found in cache.');
         return;
       }
-    }
 
-    const roleId = '1389859132198096946'; // CNS Official role
-
-    try {
-      if (isUsingTag) {
-        if (!member.roles.cache.has(roleId)) {
-          await member.roles.add(roleId, 'User enabled server tag');
-        }
-      } else {
-        if (member.roles.cache.has(roleId)) {
-          await member.roles.remove(roleId, 'User disabled server tag');
+      // Try to fetch member if not cached
+      let member = guild.members.cache.get(userId);
+      if (!member) {
+        try {
+          member = await guild.members.fetch(userId);
+        } catch (err) {
+          console.error('Member not found in guild:', err);
+          return;
         }
       }
-    } catch (err) {
-      console.error('Error updating CNS Official role:', err);
-    }
 
-    // Update stats after role change using the count of members with the CNS Official role
-    const membersWithRole = guild.members.cache.filter(m => m.roles.cache.has(roleId)).size;
-    if (typeof updateStats === 'function') {
-      await updateStats(client, guild, membersWithRole);
+      const roleId = '1389859132198096946'; // CNS Official role
+
+      try {
+        if (isUsingTag) {
+          if (!member.roles.cache.has(roleId)) {
+            await member.roles.add(roleId, 'User enabled server tag');
+            await logTagSync(client, member.id, member.user.tag, 'Added', 'User enabled server tag');
+          }
+        } else {
+          if (member.roles.cache.has(roleId)) {
+            await member.roles.remove(roleId, 'User disabled server tag');
+            await logTagSync(client, member.id, member.user.tag, 'Removed', 'User disabled server tag');
+          }
+        }
+      } catch (err) {
+        console.error('Error updating CNS Official role:', err);
+      }
+
+      // Update stats after role change using the count of members with the CNS Official role
+      const membersWithRole = guild.members.cache.filter(m => m.roles.cache.has(roleId)).size;
+      if (typeof updateStats === 'function' && client.isReady()) {
+        await updateStats(client, guild.id, channelsConfig().statsChannelId);
+      }
     }
+  } catch (error) {
+    console.error('Error in raw event handler:', error);
   }
 });
 

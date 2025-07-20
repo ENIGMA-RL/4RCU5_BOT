@@ -1,5 +1,6 @@
 import { rolesConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
+import { logRoleChange } from '../../utils/botLogger.js';
 
 export const data = {
   name: 'sync-level-roles',
@@ -64,6 +65,12 @@ export const execute = async (interaction) => {
         if (!isPersistent) {
           await member.roles.remove(roleId, 'Level role sync');
           removed++;
+          
+          // Log the role removal
+          const role = guild.roles.cache.get(roleId);
+          if (role) {
+            await logRoleChange(guild.client, member.id, member.user.tag, 'Removed', role.name, 'Level role sync');
+          }
         }
       }
     }
@@ -72,6 +79,12 @@ export const execute = async (interaction) => {
     if (correctRoleId && !member.roles.cache.has(correctRoleId)) {
       await member.roles.add(correctRoleId, 'Level role sync');
       added++;
+      
+      // Log the role addition
+      const role = guild.roles.cache.get(correctRoleId);
+      if (role) {
+        await logRoleChange(guild.client, member.id, member.user.tag, 'Assigned', role.name, 'Level role sync');
+      }
     }
   }
 

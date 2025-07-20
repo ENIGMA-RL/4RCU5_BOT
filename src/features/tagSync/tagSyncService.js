@@ -2,6 +2,7 @@ import fetch from 'node-fetch';
 import { logRoleAssignment } from '../../utils/moderationLogger.js';
 import { rolesConfig, channelsConfig, isDev } from '../../config/configLoader.js';
 import { EmbedBuilder } from 'discord.js';
+import { logTagSync } from '../../utils/botLogger.js';
 
 /**
  * Check if user has server tag enabled using bot token
@@ -40,14 +41,30 @@ export async function checkUserTagStatus(userId, client) {
     const userData = await userResponse.json();
     const tagData = userData.primary_guild;
     
+    // Debug logging
+    if (isDev()) {
+      console.log(`[TagSync Debug] User ${userId} data:`, {
+        hasPrimaryGuild: !!tagData,
+        primaryGuild: tagData,
+        identityEnabled: tagData?.identity_enabled,
+        identityGuildId: tagData?.identity_guild_id,
+        expectedGuildId: rolesConfig().tagGuildId
+      });
+    }
+    
     // Check if user has tag enabled for the configured guild
-    const isUsingTag = tagData && 
-                      tagData.identity_enabled && 
-                      tagData.identity_guild_id === rolesConfig().tagGuildId;
+    const tagGuildId = rolesConfig().tagGuildId;
+    const hasTag = tagData && 
+                  tagData.identity_enabled && 
+                  tagData.identity_guild_id === tagGuildId;
+
+    if (isDev()) {
+      console.log(`[TagSync Debug] User ${userId} hasTag: ${hasTag}`);
+    }
 
     return {
       userId,
-      isUsingTag,
+      isUsingTag: hasTag,
       tagData,
       userData
     };
@@ -99,6 +116,7 @@ export async function syncUserTagRole(userId, guild, client) {
         const role = guild.roles.cache.get(cnsOfficialRoleId);
         if (role) {
           await logRoleAssignment(guild.client, member, role, null);
+          await logTagSync(guild.client, member.id, member.user.tag, 'Added', 'Server tag enabled');
         }
         
         return { 
@@ -119,6 +137,12 @@ export async function syncUserTagRole(userId, guild, client) {
       // User has tag disabled - remove role if they have it
       if (hasRole) {
         await member.roles.remove(cnsOfficialRoleId, 'Server tag disabled');
+        
+        // Log the role removal
+        const role = guild.roles.cache.get(cnsOfficialRoleId);
+        if (role) {
+          await logTagSync(guild.client, member.id, member.user.tag, 'Removed', 'Server tag disabled');
+        }
         
         return { 
           success: true, 
@@ -259,16 +283,12 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
   const tagGuildId = rolesConfig().tagGuildId;
   const tagRoleId = rolesConfig().cnsOfficialRole;
   const statsChannelId = channelsConfig().statsChannelId;
-  const logChannelId = channelsConfig().logChannelId;
 
   // Fetch all members in the main guild
   const mainGuildMembers = await mainGuild.members.fetch();
   let count = 0;
   let updated = 0;
   let removed = 0;
-
-  // Fetch log channel once
-  const logChannel = await mainGuild.channels.fetch(logChannelId).catch(() => null);
 
   for (const member of mainGuildMembers.values()) {
     try {
@@ -313,15 +333,11 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
       if (hasTag && !hasRole) {
         await member.roles.add(tagRoleId, 'Has CNS tag enabled for tag guild');
         updated++;
-        if (logChannel && logChannel.isTextBased()) {
-          await logChannel.send(`Assigned CNS Official role to ${member.user.tag} (${member.id})`);
-        }
+        await logTagSync(client, member.id, member.user.tag, 'Added', 'Bulk sync - Has CNS tag enabled');
       } else if (!hasTag && hasRole) {
         await member.roles.remove(tagRoleId, 'No CNS tag enabled for tag guild');
         removed++;
-        if (logChannel && logChannel.isTextBased()) {
-          await logChannel.send(`Removed CNS Official role from ${member.user.tag} (${member.id})`);
-        }
+        await logTagSync(client, member.id, member.user.tag, 'Removed', 'Bulk sync - No CNS tag enabled');
       }
     } catch (error) {
       console.error(`Error processing member ${member.user.tag}:`, error);

@@ -1,5 +1,6 @@
 import { handleMessageXP } from '../features/leveling/levelingSystem.js';
 import { rolesConfig } from '../config/configLoader.js';
+import { logInviteBlock } from '../utils/botLogger.js';
 
 export const name = 'messageCreate';
 export const execute = async (message) => {
@@ -24,6 +25,9 @@ export const execute = async (message) => {
         });
         // Optionally DM the user as well
         await message.author.send('Your message was deleted because posting Discord invite links is not allowed in this server.');
+        
+        // Log the action
+        await logInviteBlock(message.client, message.author.id, message.author.tag, message.channel.name);
       } catch (err) {
         console.error('Error deleting invite link message or sending warning:', err);
       }

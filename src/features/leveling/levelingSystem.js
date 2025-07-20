@@ -9,6 +9,7 @@ import {
   getTopUsers
 } from '../../database/db.js';
 import { levelSettingsConfig, channelsConfig } from '../../config/configLoader.js';
+import { logRoleChange, logLevelUp } from '../../utils/botLogger.js';
 
 const { leveling } = levelSettingsConfig();
 
@@ -100,6 +101,10 @@ async function handleLevelUp(member, newLevel, type) {
       await sendLevelUpNotification(member, newLevel, type);
     }
 
+    // Log the level up
+    const oldLevel = type === 'message' ? (user.level || 0) : (user.voice_level || 0);
+    await logLevelUp(member.client, member.id, member.user.tag, oldLevel, newLevel, type);
+
     console.log(`🎉 ${member.user.tag} reached level ${newLevel} (${type})`);
   } catch (error) {
     console.error('Error handling level up:', error);
@@ -129,6 +134,9 @@ async function assignLevelRole(member, totalLevel) {
     // Assign the role
     await member.roles.add(role, `Total Level ${totalLevel} achievement`);
     console.log(`🎭 Assigned ${role.name} to ${member.user.tag} for reaching total level ${totalLevel}`);
+    
+    // Log the role assignment
+    await logRoleChange(member.client, member.id, member.user.tag, 'Assigned', role.name, `Total Level ${totalLevel} achievement`);
 
     // Handle role removal based on new logic (using total level)
     await handleRoleRemoval(member, totalLevel);
@@ -163,6 +171,9 @@ async function handleRoleRemoval(member, currentTotalLevel) {
           if (role) {
             await member.roles.remove(role, `Replaced by higher total level role`);
             console.log(`🗑️ Removed ${role.name} from ${member.user.tag} (total level ${level} → ${currentTotalLevel})`);
+            
+            // Log the role removal
+            await logRoleChange(member.client, member.id, member.user.tag, 'Removed', role.name, `Replaced by higher total level role (${level} → ${currentTotalLevel})`);
           }
         }
       }

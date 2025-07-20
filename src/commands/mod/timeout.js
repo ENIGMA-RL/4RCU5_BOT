@@ -33,7 +33,7 @@ export const execute = async (interaction) => {
   const input = interaction.options.getString('user_and_duration');
   
   // Parse the input to extract user mention and duration
-  const mentionMatch = input.match(/<@!?\d+>/);
+  const mentionMatch = input.match(/<@!?(\d+)>/);
   if (!mentionMatch) {
     await interaction.reply({ 
       content: 'Please mention a user with @username followed by the duration.', 
