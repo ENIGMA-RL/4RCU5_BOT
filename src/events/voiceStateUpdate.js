@@ -57,7 +57,19 @@ export const execute = async (oldState, newState) => {
     const member = newState.member;
     const guild = newState.guild;
     const userId = member.id;
-    
+
+    // CNS Rookie role check
+    const rookieRoleId = rolesConfig().levelRoles.cnsRookie;
+    if (!member.roles.cache.has(rookieRoleId)) {
+      try {
+        await member.send('❌ You need to reach the **CNS Rookie** level to create a voice channel.');
+      } catch (e) {
+        // Ignore DM errors
+      }
+      console.log(`[JoinToCreate] ${member.user.tag} tried to create a channel but lacks CNS Rookie role.`);
+      return;
+    }
+
     // Check cooldown to prevent multiple channel creation
     const now = Date.now();
     const cooldownTime = userCooldowns.get(userId);
@@ -65,9 +77,9 @@ export const execute = async (oldState, newState) => {
       console.log(`[JoinToCreate] ${member.user.tag} is on cooldown. Skipping channel creation.`);
       return;
     }
-    
+
     console.log(`[JoinToCreate] ${member.user.tag} joined the join-to-create channel. Waiting for stable connection...`);
-    
+
     // Set cooldown
     userCooldowns.set(userId, now);
 

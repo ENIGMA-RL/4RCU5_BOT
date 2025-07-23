@@ -55,19 +55,26 @@ export const execute = async (interaction) => {
     // CNS Newcomer+ permissions
     if (cnsNewcomerRole) {
       permissionsText += `**${cnsNewcomerRole}** and above:\n`;
-      permissionsText += '• Embed links\n• Attach files\n\n';
+      permissionsText += '• Embed links\n• Attach files\n• Add reactions\n\n';
+    }
+
+    // CNS Rookie+ permissions
+    const cnsRookieRole = interaction.guild.roles.cache.get(rolesConfig().levelRoles.cnsRookie);
+    if (cnsRookieRole) {
+      permissionsText += `**${cnsRookieRole}** and above:\n`;
+      permissionsText += '• Create voice channels\n\n';
     }
 
     // CNS Member+ permissions
     if (cnsMemberRole) {
       permissionsText += `**${cnsMemberRole}** and above:\n`;
-      permissionsText += '• Add reactions\n• Create threads\n• Create voice channels\n\n';
+      permissionsText += '• Create threads\n• Use external emotes\n\n';
     }
 
     // CNS Official permissions
     if (cnsOfficialRole) {
       permissionsText += `**${cnsOfficialRole}**:\n`;
-      permissionsText += '• Use external emotes\n• Use stickers\n• Change nickname\n\n';
+      permissionsText += '• Use stickers\n• Change nickname\n• CNS Official Lounge\n• Use external emotes\n\n';
     }
 
     // CNS Special Member permissions

@@ -58,7 +58,8 @@ export const execute = async (interaction) => {
     embed.addFields({
       name: '🎤 Voice Channel Commands',
       value: vcCommands.map(cmd => `**${cmd.name}** - ${cmd.description}`).join('\n') +
-        '\n\n*Only the channel owner can use /lock, /unlock, /limit, /rename, /transfer, and /vc-allow. Use /vc-claim to claim ownership if the owner leaves the channel. Use /vc-allow to permit specific users to join your locked channel.*',
+        '\n\n*Only the channel owner can use /lock, /unlock, /limit, /rename, /transfer, and /vc-allow. Use /vc-claim to claim ownership if the owner leaves the channel. Use /vc-allow to permit specific users to join your locked channel.*' +
+        '\n\n__**Note:**__ Only users with the CNS Rookie role or higher can create a voice channel using the join-to-create system.' ,
       inline: false
     });
 
