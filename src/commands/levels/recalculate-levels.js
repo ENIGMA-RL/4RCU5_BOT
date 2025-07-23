@@ -1,6 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
-import { getTopUsers } from '../../database/db.js';
-import { calculateLevel, updateUserLevel, levelSettingsConfig } from '../../features/leveling/levelingSystem.js';
+import { calculateLevel, updateUserLevel, getTopUsers } from '../../database/db.js';
+import { levelSettingsConfig } from '../../config/configLoader.js';
 import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
