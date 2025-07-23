@@ -46,14 +46,18 @@ export const execute = async (interaction) => {
     // Get user level
     const userData = await getUserLevelData(member.id);
     const userTotalLevel = userData?.totalLevel || 0;
+    const userXP = (userData?.xp || 0) + (userData?.voice_xp || 0);
     
     // Find the highest role for their total level
     let correctRoleId = null;
+    let correctLevel = null;
     for (const [level, roleId] of Object.entries(roleAssignments)) {
       if (userTotalLevel >= parseInt(level)) {
         correctRoleId = roleId;
+        correctLevel = level;
       }
     }
+    console.log(`[SYNC] ${member.user.tag}: XP=${userXP}, totalLevel=${userTotalLevel}, correctLevel=${correctLevel}, assigning roleId=${correctRoleId}`);
     
     // Remove all level roles except persistent roles and the correct one
     for (const roleId of levelRoleIds) {
@@ -61,30 +65,26 @@ export const execute = async (interaction) => {
         // Check if this role should be persistent
         const roleLevel = Object.entries(roleAssignments).find(([level, id]) => id === roleId)?.[0];
         const isPersistent = roleLevel ? persistentRolesConfig[roleLevel] : false;
-        
         if (!isPersistent) {
           await member.roles.remove(roleId, 'Level role sync');
           removed++;
-          
-          // Log the role removal
           const role = guild.roles.cache.get(roleId);
           if (role) {
             await logRoleChange(guild.client, member.id, member.user.tag, 'Removed', role.name, 'Level role sync');
           }
+          console.log(`[SYNC] Removed roleId=${roleId} from ${member.user.tag}`);
         }
       }
     }
-    
     // Add the correct role if missing
     if (correctRoleId && !member.roles.cache.has(correctRoleId)) {
       await member.roles.add(correctRoleId, 'Level role sync');
       added++;
-      
-      // Log the role addition
       const role = guild.roles.cache.get(correctRoleId);
       if (role) {
         await logRoleChange(guild.client, member.id, member.user.tag, 'Assigned', role.name, 'Level role sync');
       }
+      console.log(`[SYNC] Added roleId=${correctRoleId} to ${member.user.tag}`);
     }
   }
 
