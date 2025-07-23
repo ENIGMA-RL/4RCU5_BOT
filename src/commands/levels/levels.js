@@ -110,7 +110,7 @@ export const execute = async (interaction) => {
     });
 
     embed.addFields(
-      { name: '🔊 Join to Create', value: 'CNS Member+ can join the special channel to create their own temporary voice channel. Use /vc commands to manage it!' }
+      { name: '🔊 Join to Create', value: 'CNS Rookie+ can join the special channel to create their own temporary voice channel. Use /vc commands to manage it!' }
     );
 
     await interaction.reply({ embeds: [embed] });
