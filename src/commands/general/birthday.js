@@ -71,14 +71,15 @@ export const execute = async (interaction) => {
 
     const userId = interaction.user.id;
     const guildId = interaction.guild.id;
+    const username = interaction.user.tag; // Store the username
 
     // Store or update the birthday in the database
     const stmt = db.prepare(`
-      INSERT OR REPLACE INTO birthdays (user_id, guild_id, birth_day, birth_month, birth_year, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT OR REPLACE INTO birthdays (user_id, guild_id, username, birth_day, birth_month, birth_year, created_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?)
     `);
 
-    stmt.run(userId, guildId, day, month, year, Date.now());
+    stmt.run(userId, guildId, username, day, month, year, Date.now());
 
     // Create confirmation embed
     const embed = new EmbedBuilder()

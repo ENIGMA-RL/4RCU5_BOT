@@ -56,7 +56,7 @@ export async function checkBirthdays(client) {
       if (!guild) continue;
 
       const member = await guild.members.fetch(birthday.user_id).catch(() => null);
-      if (!member) continue;
+      const username = birthday.username || 'Unknown User'; // Use stored username as fallback
 
       const birthdayRoleId = rolesConfig().birthdayRole;
       const birthdayRole = guild.roles.cache.get(birthdayRoleId);
@@ -64,16 +64,16 @@ export async function checkBirthdays(client) {
 
       // Check if it's 7 AM for birthday message
       if (currentHour === 7) {
-        await sendBirthdayMessage(client, guild, member);
+        await sendBirthdayMessage(client, guild, member, username, birthday.user_id);
       }
 
       // Check if it's midnight (0 AM) for role assignment
-      if (currentHour === 0) {
+      if (currentHour === 0 && member) {
         await assignBirthdayRole(member, birthdayRole);
       }
 
       // Check if it's 11:59 PM to remove the role (24 hours after assignment)
-      if (currentHour === 23) {
+      if (currentHour === 23 && member) {
         await removeBirthdayRole(member, birthdayRole);
       }
     }
@@ -85,14 +85,21 @@ export async function checkBirthdays(client) {
 /**
  * Send birthday message to general chat
  */
-async function sendBirthdayMessage(client, guild, member) {
+async function sendBirthdayMessage(client, guild, member, username, userId) {
   try {
     const generalChannelId = channelsConfig().generalChannelId;
     const generalChannel = await guild.channels.fetch(generalChannelId).catch(() => null);
     
     if (generalChannel && generalChannel.isTextBased()) {
       const { icon, message } = getRandomBirthdayContent();
-      await generalChannel.send(`${icon} **Happy Birthday <@${member.id}>!** ${message}`);
+      
+      if (member) {
+        // Member is still in the server, use mention
+        await generalChannel.send(`${icon} **Happy Birthday <@${userId}>!** ${message}`);
+      } else {
+        // Member left the server, use username instead
+        await generalChannel.send(`${icon} **Happy Birthday ${username}!** ${message}`);
+      }
     }
   } catch (error) {
     console.error('Error sending birthday message:', error);
@@ -148,4 +155,16 @@ export function removeUserBirthday(userId, guildId) {
     WHERE user_id = ? AND guild_id = ?
   `);
   return stmt.run(userId, guildId);
+}
+
+/**
+ * Update username for existing birthday entries
+ */
+export function updateBirthdayUsername(userId, guildId, username) {
+  const stmt = db.prepare(`
+    UPDATE birthdays 
+    SET username = ? 
+    WHERE user_id = ? AND guild_id = ?
+  `);
+  return stmt.run(username, userId, guildId);
 } 

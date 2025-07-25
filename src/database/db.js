@@ -37,6 +37,7 @@ function initializeDatabase() {
     CREATE TABLE IF NOT EXISTS birthdays (
       user_id TEXT,
       guild_id TEXT,
+      username TEXT,
       birth_day INTEGER NOT NULL,
       birth_month INTEGER NOT NULL,
       birth_year INTEGER NOT NULL,
@@ -44,6 +45,13 @@ function initializeDatabase() {
       PRIMARY KEY (user_id, guild_id)
     )
   `);
+
+  // Add username column to existing birthdays table if it doesn't exist
+  try {
+    db.exec('ALTER TABLE birthdays ADD COLUMN username TEXT');
+  } catch (error) {
+    // Column already exists, ignore error
+  }
 
   // Add missing columns to existing users table if they don't exist
   try {
