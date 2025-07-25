@@ -2,16 +2,16 @@ import { channelsConfig } from '../config/configLoader.js';
 
 export const logBotAction = async (client, action, details) => {
   try {
-    // Get the first guild from the client (or use a specific guild ID if needed)
-    const guild = client.guilds.cache.first();
+    // Get the guild using GUILD_ID from environment
+    const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
-      console.error('No guild found in client cache');
+      console.error(`Guild with ID ${process.env.GUILD_ID} not found in client cache`);
       return;
     }
 
     const logChannel = await guild.channels.fetch(channelsConfig().botLogChannelId);
     if (!logChannel) {
-      console.error('Bot log channel not found');
+      console.error(`Bot log channel ${channelsConfig().botLogChannelId} not found in guild ${guild.name}`);
       return;
     }
 

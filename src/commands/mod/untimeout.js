@@ -1,4 +1,5 @@
 import { ApplicationCommandOptionType } from 'discord.js';
+import { logModerationAction } from '../../utils/moderationLogger.js';
 import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
@@ -83,8 +84,14 @@ export const execute = async (interaction) => {
     // Remove timeout
     await member.timeout(null, `Timeout removed by ${interaction.user.tag}`);
     
-    // Log the action
-    console.log(`Timeout removed: ${interaction.user.tag} removed timeout from ${user.tag}`);
+    // Log the action and send DM
+    await logModerationAction(
+      interaction.client,
+      'Untimeout',
+      user,
+      interaction.user,
+      `Timeout removed by ${interaction.user.tag}`
+    );
 
     await interaction.reply({ 
       content: `✅ Successfully removed timeout from ${user.tag}`, 

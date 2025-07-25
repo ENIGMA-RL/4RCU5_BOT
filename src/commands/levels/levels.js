@@ -54,7 +54,7 @@ export const execute = async (interaction) => {
     
     // CNS Newcomer+ permissions
     if (cnsNewcomerRole) {
-      permissionsText += `**${cnsNewcomerRole}** and above:\n`;
+      permissionsText += `**${cnsNewcomerRole}**\n`;
       permissionsText += '• Embed links\n• Attach files\n• Add reactions\n\n';
     }
 
