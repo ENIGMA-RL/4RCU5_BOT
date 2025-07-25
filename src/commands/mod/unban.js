@@ -1,4 +1,5 @@
-import { ApplicationCommandOptionType } from 'discord.js';
+import { ApplicationCommandOptionType, PermissionFlagsBits } from 'discord.js';
+import { logModerationAction } from '../../utils/moderationLogger.js';
 import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
@@ -65,8 +66,14 @@ export const execute = async (interaction) => {
     // Unban the user
     await interaction.guild.members.unban(userId, `Unbanned by ${interaction.user.tag}`);
     
-    // Log the action
-    console.log(`User unbanned: ${interaction.user.tag} unbanned ${user.tag}`);
+    // Log the action and send DM
+    await logModerationAction(
+      interaction.client,
+      'Unban',
+      user,
+      interaction.user,
+      `Unbanned by ${interaction.user.tag}`
+    );
 
     await interaction.reply({ 
       content: `✅ Successfully unbanned ${user.tag}`, 

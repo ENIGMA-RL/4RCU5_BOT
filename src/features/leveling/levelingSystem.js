@@ -9,7 +9,7 @@ import {
   getTopUsers
 } from '../../database/db.js';
 import { levelSettingsConfig, channelsConfig } from '../../config/configLoader.js';
-import { logRoleChange, logLevelUp } from '../../utils/botLogger.js';
+import { logRoleChange } from '../../utils/botLogger.js';
 
 const { leveling } = levelSettingsConfig();
 
@@ -101,10 +101,6 @@ async function handleLevelUp(member, newLevel, type) {
       await sendLevelUpNotification(member, newLevel, type);
     }
 
-    // Log the level up
-    const oldLevel = type === 'message' ? (user.level || 0) : (user.voice_level || 0);
-    await logLevelUp(member.client, member.id, member.user.tag, oldLevel, newLevel, type);
-
     console.log(`🎉 ${member.user.tag} reached level ${newLevel} (${type})`);
   } catch (error) {
     console.error('Error handling level up:', error);
@@ -147,35 +143,71 @@ async function assignLevelRole(member, totalLevel) {
 
 async function handleRoleRemoval(member, currentTotalLevel) {
   try {
+    console.log(`🔍 Checking role removal for ${member.user.tag} (total level: ${currentTotalLevel})`);
+    
     // Get all level roles that should be checked for removal
     const levelNumbers = Object.keys(leveling.roleAssignments)
       .map(Number)
       .filter(level => level < currentTotalLevel)
       .sort((a, b) => b - a); // Sort descending to check highest first
 
+    console.log(`📋 Checking levels for removal: ${levelNumbers.join(', ')}`);
+
     for (const level of levelNumbers) {
       const roleId = leveling.roleAssignments[level.toString()];
-      if (!roleId || !member.roles.cache.has(roleId)) {
+      console.log(`🔍 Checking level ${level} (roleId: ${roleId})`);
+      
+      if (!roleId) {
+        console.log(`❌ No role ID found for level ${level}`);
+        continue;
+      }
+      
+      if (!member.roles.cache.has(roleId)) {
+        console.log(`❌ User doesn't have role ${roleId} for level ${level}`);
         continue; // No role assigned or user doesn't have it
       }
 
       // Check if this role should be persistent
       const isPersistent = leveling.persistentRoles[level.toString()];
+      console.log(`🔒 Level ${level} persistent: ${isPersistent}`);
       
       if (!isPersistent) {
         // Find the next higher level role that should replace this one
         const shouldRemove = shouldRemoveRole(level, currentTotalLevel);
+        console.log(`🤔 Should remove level ${level} role: ${shouldRemove}`);
         
         if (shouldRemove) {
-          const role = await member.guild.roles.fetch(roleId);
-          if (role) {
-            await member.roles.remove(role, `Replaced by higher total level role`);
-            console.log(`🗑️ Removed ${role.name} from ${member.user.tag} (total level ${level} → ${currentTotalLevel})`);
-            
-            // Log the role removal
-            await logRoleChange(member.client, member.id, member.user.tag, 'Removed', role.name, `Replaced by higher total level role (${level} → ${currentTotalLevel})`);
+          try {
+            const role = await member.guild.roles.fetch(roleId);
+            if (role) {
+              console.log(`🗑️ Attempting to remove ${role.name} from ${member.user.tag}`);
+              
+              // Check if bot has permission to manage this role
+              const botMember = member.guild.members.me;
+              if (!botMember.permissions.has('ManageRoles')) {
+                console.error(`❌ Bot doesn't have ManageRoles permission`);
+                return;
+              }
+              
+              if (role.position >= botMember.roles.highest.position) {
+                console.error(`❌ Role ${role.name} is higher than bot's highest role`);
+                return;
+              }
+              
+              await member.roles.remove(role, `Replaced by higher total level role`);
+              console.log(`✅ Successfully removed ${role.name} from ${member.user.tag} (total level ${level} → ${currentTotalLevel})`);
+              
+              // Log the role removal
+              await logRoleChange(member.client, member.id, member.user.tag, 'Removed', role.name, `Replaced by higher total level role (${level} → ${currentTotalLevel})`);
+            } else {
+              console.error(`❌ Could not fetch role with ID ${roleId}`);
+            }
+          } catch (roleError) {
+            console.error(`❌ Error removing role ${roleId} from ${member.user.tag}:`, roleError);
           }
         }
+      } else {
+        console.log(`🔒 Skipping removal of persistent role for level ${level}`);
       }
     }
   } catch (error) {
@@ -190,12 +222,16 @@ function shouldRemoveRole(roleLevel, currentTotalLevel) {
     .filter(level => level > roleLevel && level <= currentTotalLevel)
     .sort((a, b) => a - b); // Sort ascending
 
+  console.log(`🔍 shouldRemoveRole(${roleLevel}, ${currentTotalLevel}): higherLevels = [${higherLevels.join(', ')}]`);
+
   if (higherLevels.length === 0) {
+    console.log(`❌ No higher level roles found, keeping role level ${roleLevel}`);
     return false; // No higher level roles to replace this one
   }
 
   // If there are any higher level roles, this role should be removed
   // (unless it's persistent, which is checked in handleRoleRemoval)
+  console.log(`✅ Higher level roles found, should remove role level ${roleLevel}`);
   return true;
 }
 

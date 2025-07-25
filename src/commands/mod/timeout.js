@@ -100,7 +100,8 @@ export const execute = async (interaction) => {
       'Timeout',
       user,
       interaction.user,
-      `${durationStr} timeout`
+      `Timeout by ${interaction.user.tag}`,
+      durationMs
     );
     
     // Send invisible feedback to the moderator
