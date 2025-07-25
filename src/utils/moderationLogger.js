@@ -7,17 +7,10 @@ export const logModerationAction = async (client, action, targetUser, moderator,
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
       console.error(`Guild with ID ${process.env.GUILD_ID} not found in client cache`);
-      console.log('Available guilds:', client.guilds.cache.map(g => `${g.name} (${g.id})`));
       return;
     }
 
-    console.log(`🔍 Attempting to fetch mod log channel ${channelsConfig().modLogChannelId} from guild ${guild.name} (${guild.id})`);
-    
-    const logChannel = await guild.channels.fetch(channelsConfig().modLogChannelId).catch((error) => {
-      console.error(`❌ Failed to fetch mod log channel: ${error.message}`);
-      return null;
-    });
-    
+    const logChannel = await guild.channels.fetch(channelsConfig().modLogChannelId).catch(() => null);
     if (!logChannel) {
       console.error(`Moderation log channel ${channelsConfig().modLogChannelId} not found in guild ${guild.name}`);
       return;

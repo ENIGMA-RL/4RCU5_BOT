@@ -30,11 +30,23 @@ export async function handleMessageXP(member) {
     const newXP = user.xp + leveling.xpPerMessage;
     const newLevel = calculateLevel(newXP, leveling.xpThresholds);
 
+    // Calculate current total level
+    const currentTotalXP = user.xp + user.voice_xp;
+    const currentTotalLevel = calculateLevel(currentTotalXP, leveling.xpThresholds);
+
     // Update user in database
     updateUserXP(userId, leveling.xpPerMessage, 0);
     
-    // Check if level up occurred
-    if (newLevel > user.level) {
+    // Calculate new total level
+    const newTotalXP = newXP + user.voice_xp;
+    const newTotalLevel = calculateLevel(newTotalXP, leveling.xpThresholds);
+    
+    // Check if total level up occurred (this is what matters for role assignment)
+    if (newTotalLevel > currentTotalLevel) {
+      console.log(`🎯 Total level up detected for ${member.user.tag}: ${currentTotalLevel} → ${newTotalLevel}`);
+      await handleLevelUp(member, newLevel, 'message');
+    } else if (newLevel > user.level) {
+      console.log(`📈 Message level up detected for ${member.user.tag}: ${user.level} → ${newLevel} (but total level unchanged)`);
       await handleLevelUp(member, newLevel, 'message');
     }
 
@@ -59,11 +71,23 @@ export async function handleVoiceXP(member) {
     const newVoiceXP = user.voice_xp + leveling.xpPerMinuteVoice;
     const newVoiceLevel = calculateLevel(newVoiceXP, leveling.xpThresholds);
 
+    // Calculate current total level
+    const currentTotalXP = user.xp + user.voice_xp;
+    const currentTotalLevel = calculateLevel(currentTotalXP, leveling.xpThresholds);
+
     // Update user in database
     updateUserXP(userId, 0, leveling.xpPerMinuteVoice);
     
-    // Check if voice level up occurred
-    if (newVoiceLevel > (user.voice_level || 0)) {
+    // Calculate new total level
+    const newTotalXP = user.xp + newVoiceXP;
+    const newTotalLevel = calculateLevel(newTotalXP, leveling.xpThresholds);
+    
+    // Check if total level up occurred (this is what matters for role assignment)
+    if (newTotalLevel > currentTotalLevel) {
+      console.log(`🎯 Total level up detected for ${member.user.tag}: ${currentTotalLevel} → ${newTotalLevel}`);
+      await handleLevelUp(member, newVoiceLevel, 'voice');
+    } else if (newVoiceLevel > (user.voice_level || 0)) {
+      console.log(`📈 Voice level up detected for ${member.user.tag}: ${user.voice_level || 0} → ${newVoiceLevel} (but total level unchanged)`);
       await handleLevelUp(member, newVoiceLevel, 'voice');
     }
 
@@ -75,6 +99,8 @@ export async function handleVoiceXP(member) {
 
 async function handleLevelUp(member, newLevel, type) {
   try {
+    console.log(`🎉 handleLevelUp called for ${member.user.tag} - newLevel: ${newLevel}, type: ${type}`);
+    
     const userId = member.id;
     const user = getUser(userId);
 
@@ -85,6 +111,8 @@ async function handleLevelUp(member, newLevel, type) {
     // Calculate total XP and total level
     const totalXP = currentMessageXP + currentVoiceXP;
     const totalLevel = calculateLevel(totalXP, leveling.xpThresholds);
+    
+    console.log(`📊 ${member.user.tag} - Message XP: ${currentMessageXP}, Voice XP: ${currentVoiceXP}, Total XP: ${totalXP}, Total Level: ${totalLevel}`);
 
     // Update levels in database
     if (type === 'message') {
@@ -103,33 +131,43 @@ async function handleLevelUp(member, newLevel, type) {
 
     console.log(`🎉 ${member.user.tag} reached level ${newLevel} (${type})`);
   } catch (error) {
-    console.error('Error handling level up:', error);
+    console.error('❌ Error handling level up:', error);
   }
 }
 
 async function assignLevelRole(member, totalLevel) {
   try {
+    console.log(`🎭 Attempting to assign role for ${member.user.tag} (total level: ${totalLevel})`);
+    
     // Check if this total level has a role assignment
     const roleId = leveling.roleAssignments[totalLevel.toString()];
+    console.log(`🔍 Role assignment for level ${totalLevel}: ${roleId}`);
+    
     if (!roleId) {
+      console.log(`❌ No role assignment found for total level ${totalLevel}`);
       return; // No role for this total level
     }
 
     // Get the role
     const role = await member.guild.roles.fetch(roleId);
     if (!role) {
-      console.error(`Role ${roleId} not found for total level ${totalLevel}`);
+      console.error(`❌ Role ${roleId} not found for total level ${totalLevel}`);
       return;
     }
 
+    console.log(`✅ Found role: ${role.name} (${roleId})`);
+
     // Check if user already has the role
     if (member.roles.cache.has(roleId)) {
+      console.log(`ℹ️ User ${member.user.tag} already has role ${role.name}`);
       return; // Already has the role
     }
 
+    console.log(`🎭 Assigning ${role.name} to ${member.user.tag}...`);
+    
     // Assign the role
     await member.roles.add(role, `Total Level ${totalLevel} achievement`);
-    console.log(`🎭 Assigned ${role.name} to ${member.user.tag} for reaching total level ${totalLevel}`);
+    console.log(`✅ Successfully assigned ${role.name} to ${member.user.tag} for reaching total level ${totalLevel}`);
     
     // Log the role assignment
     await logRoleChange(member.client, member.id, member.user.tag, 'Assigned', role.name, `Total Level ${totalLevel} achievement`);
@@ -137,7 +175,7 @@ async function assignLevelRole(member, totalLevel) {
     // Handle role removal based on new logic (using total level)
     await handleRoleRemoval(member, totalLevel);
   } catch (error) {
-    console.error('Error assigning level role:', error);
+    console.error('❌ Error assigning level role:', error);
   }
 }
 
