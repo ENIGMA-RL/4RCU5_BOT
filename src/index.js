@@ -12,7 +12,7 @@ import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
 import { setPresence } from './features/presence/presenceManager.js';
 import { channelsConfig, getEnvironment } from './config/configLoader.js';
-import { logTagSync, debugGuildChannels } from './utils/botLogger.js';
+import { logTagSync } from './utils/botLogger.js';
 
 // Load environment variables
 dotenv.config();
@@ -134,9 +134,6 @@ client.once('ready', async () => {
   
   if (guild) {
     console.log(`Connected to guild: ${guild.name} (${guild.id})`);
-    
-    // Debug guild-channel relationships
-    await debugGuildChannels(client);
     
     // Fetch all members to ensure we have complete member cache
     console.log('🔄 Fetching all guild members...');
