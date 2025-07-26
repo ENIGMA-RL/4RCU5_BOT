@@ -94,8 +94,8 @@ export const execute = async (interaction) => {
 };
 
 async function createLeaderboardCard(textUsers, voiceUsers, page) {
-  const width = 900; // Back to original width
-  const height = 856; // Increased height to fit all 10 users + 3 more rows (52px * 3 = 156px extra)
+  const width = 900;
+  const height = 856;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
 
@@ -141,16 +141,16 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
   ctx.textAlign = 'center';
   ctx.fillText('CNS LEADERBOARD', width / 2, cardY + 54);
 
-  // Column settings - back to side-by-side
+  // Column settings
   const colW = (cardW - 60) / 2;
   const col1X = cardX + 40;
   const col2X = cardX + colW + 60;
   const startY = cardY + 110;
-  const rowH = 52; // Increased row height to fit all 10 users
+  const rowH = 52;
   const avatarSize = 36;
 
-  // Column titles - smaller text
-  ctx.font = 'bold 24px Montserrat, Arial'; // Reduced from 28px
+  // Column titles
+  ctx.font = 'bold 24px Montserrat, Arial';
   ctx.fillStyle = '#ff7bac';
   ctx.textAlign = 'left';
   ctx.fillText('💬 MESSAGE XP', col1X, startY);

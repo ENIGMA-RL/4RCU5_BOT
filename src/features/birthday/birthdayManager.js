@@ -97,7 +97,6 @@ async function sendBirthdayMessage(client, guild, member, username, userId) {
         // Member is still in the server, use mention
         await generalChannel.send(`${icon} **Happy Birthday <@${userId}>!** ${message}`);
       } else {
-        // Member left the server, use username instead
         await generalChannel.send(`${icon} **Happy Birthday ${username}!** ${message}`);
       }
     }

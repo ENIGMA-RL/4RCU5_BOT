@@ -71,7 +71,7 @@ export const execute = async (interaction) => {
 
     const userId = interaction.user.id;
     const guildId = interaction.guild.id;
-    const username = interaction.user.tag; // Store the username
+    const username = interaction.user.tag;
 
     // Store or update the birthday in the database
     const stmt = db.prepare(`

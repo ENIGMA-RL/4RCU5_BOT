@@ -25,7 +25,7 @@ export const execute = async (interaction) => {
 
   const levelSettings = levelSettingsConfig();
   const xpThresholds = levelSettings.leveling.xpThresholds;
-  const users = getTopUsers(10000); // Get all users (adjust if needed)
+  const users = getTopUsers(10000);
   let updated = 0;
 
   for (const user of users) {
