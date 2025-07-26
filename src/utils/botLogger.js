@@ -42,7 +42,7 @@ export const logMemberJoin = async (client, userId, username) => {
 };
 
 export const logMemberLeave = async (client, userId, username) => {
-  await logBotAction(client, 'Member Leave', `<@${userId}> left the server`);
+  await logBotAction(client, 'Member Leave', `${username} left the server`);
 };
 
 export const logTagSync = async (client, userId, username, action, reason) => {

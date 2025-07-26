@@ -8,10 +8,14 @@ export const once = false;
 
 export const execute = async (member) => {
   try {
-    console.log(`👋 Member left: ${member.user.tag} (${member.id})`);
+    // Capture username before user becomes unavailable
+    const username = member.user.username;
+    const userTag = member.user.tag;
     
-    // Log member leave
-    await logMemberLeave(member.client, member.id, member.user.tag);
+    console.log(`👋 Member left: ${userTag} (${member.id})`);
+    
+    // Log member leave with username instead of mention
+    await logMemberLeave(member.client, member.id, username);
     
     // Update stats when a member leaves
     await updateStats(member.client, member.guild.id, channelsConfig().statsChannelId);
