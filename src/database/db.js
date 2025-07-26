@@ -72,7 +72,7 @@ function initializeDatabase() {
     // Column already exists, ignore error
   }
 
-  // Update existing users to have proper default values
+  // Update existing users
   db.exec(`
     UPDATE users 
     SET voice_level = COALESCE(voice_level, 0),
