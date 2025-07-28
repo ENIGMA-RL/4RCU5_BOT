@@ -11,8 +11,9 @@ import { registerCommands } from './loaders/commandRegistrar.js';
 import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
 import { setPresence } from './features/presence/presenceManager.js';
-import { channelsConfig, getEnvironment } from './config/configLoader.js';
+import { channelsConfig, getEnvironment, rolesConfig } from './config/configLoader.js';
 import { logTagSync } from './utils/botLogger.js';
+import { syncUserTagRole } from './features/tagSync/tagSyncService.js';
 
 // Load environment variables
 dotenv.config();
@@ -63,7 +64,9 @@ client.on('raw', async (packet) => {
 
       if (!tagData) return;
 
-      const isUsingTag = tagData.identity_enabled && tagData.identity_guild_id === guildId;
+      // Check if the tag is for the configured guild
+      const tagGuildId = rolesConfig().tagGuildId;
+      const isUsingTag = tagData.identity_enabled && tagData.identity_guild_id === tagGuildId;
 
       const guild = client.guilds.cache.get(guildId);
       if (!guild) {
@@ -71,39 +74,14 @@ client.on('raw', async (packet) => {
         return;
       }
 
-      // Try to fetch member if not cached
-      let member = guild.members.cache.get(userId);
-      if (!member) {
-        try {
-          member = await guild.members.fetch(userId);
-        } catch (err) {
-          console.error('Member not found in guild:', err);
-          return;
+      // Use the service function for tag sync
+      const result = await syncUserTagRole(userId, guild, client);
+      
+      if (result.success && result.action !== 'no_change') {
+        // Update stats after role change
+        if (typeof updateStats === 'function' && client.isReady()) {
+          await updateStats(client, guild.id, channelsConfig().statsChannelId);
         }
-      }
-
-      const roleId = '1389859132198096946'; // CNS Official role
-
-      try {
-        if (isUsingTag) {
-          if (!member.roles.cache.has(roleId)) {
-            await member.roles.add(roleId, 'User enabled server tag');
-            await logTagSync(client, member.id, member.user.tag, 'Added', 'User enabled server tag');
-          }
-        } else {
-          if (member.roles.cache.has(roleId)) {
-            await member.roles.remove(roleId, 'User disabled server tag');
-            await logTagSync(client, member.id, member.user.tag, 'Removed', 'User disabled server tag');
-          }
-        }
-      } catch (err) {
-        console.error('Error updating CNS Official role:', err);
-      }
-
-      // Update stats after role change using the count of members with the CNS Official role
-      const membersWithRole = guild.members.cache.filter(m => m.roles.cache.has(roleId)).size;
-      if (typeof updateStats === 'function' && client.isReady()) {
-        await updateStats(client, guild.id, channelsConfig().statsChannelId);
       }
     }
   } catch (error) {
