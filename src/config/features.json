@@ -1,0 +1,363 @@
+{
+  "features": {
+    "leveling": {
+      "enabled": true,
+      "description": "XP and leveling system with automatic role assignment",
+      "requires": {
+        "channels": ["statsChannelId"],
+        "roles": ["levelRoles"],
+        "database": true
+      }
+    },
+    "voiceChannels": {
+      "enabled": true,
+      "description": "Temporary voice channel creation and management",
+      "requires": {
+        "channels": ["voiceCategoryId", "joinToCreateChannelId"],
+        "permissions": ["MANAGE_CHANNELS", "MANAGE_ROLES"]
+      }
+    },
+    "moderation": {
+      "enabled": true,
+      "description": "Moderation tools (ban, kick, timeout, etc.)",
+      "requires": {
+        "channels": ["modLogChannelId"],
+        "permissions": ["BAN_MEMBERS", "KICK_MEMBERS", "MODERATE_MEMBERS"]
+      }
+    },
+    "tagSync": {
+      "enabled": true,
+      "description": "Discord tag synchronization with role assignment",
+      "requires": {
+        "roles": ["cnsOfficialRole", "tagGuildId"],
+        "permissions": ["MANAGE_ROLES"]
+      }
+    },
+    "staffManagement": {
+      "enabled": true,
+      "description": "Staff embed management and role synchronization",
+      "requires": {
+        "channels": ["staffChannelId"],
+        "roles": ["staffRole"]
+      }
+    },
+    "birthday": {
+      "enabled": true,
+      "description": "Birthday tracking and automatic role assignment",
+      "requires": {
+        "roles": ["birthdayRole"],
+        "database": true
+      }
+    },
+    "automod": {
+      "enabled": true,
+      "description": "Automatic moderation (invite link blocking)",
+      "requires": {
+        "permissions": ["MANAGE_MESSAGES"]
+      }
+    },
+    "stats": {
+      "enabled": true,
+      "description": "Server statistics tracking and display",
+      "requires": {
+        "channels": ["statsChannelId"]
+      }
+    },
+    "rules": {
+      "enabled": true,
+      "description": "Auto-updating rules embed",
+      "requires": {
+        "channels": ["rulesChannelId"]
+      }
+    },
+    "presence": {
+      "enabled": true,
+      "description": "Bot presence management",
+      "requires": {}
+    },
+    "logging": {
+      "enabled": true,
+      "description": "Bot action logging to channels",
+      "requires": {
+        "channels": ["botLogChannelId"]
+      }
+    }
+  },
+  "commands": {
+    "general": {
+      "help": {
+        "enabled": true,
+        "description": "Shows all available commands based on your roles",
+        "category": "general"
+      },
+      "ping": {
+        "enabled": true,
+        "description": "Check bot latency",
+        "category": "general"
+      },
+
+      "info": {
+        "enabled": true,
+        "description": "Provides information about the bot",
+        "category": "general"
+      },
+      "funfact": {
+        "enabled": true,
+        "description": "Get a random useless fun fact!",
+        "category": "general"
+      },
+      "birthday": {
+        "enabled": true,
+        "description": "Set your birthday to receive birthday wishes and a special role!",
+        "category": "general",
+        "requires": ["birthday"]
+      },
+      "say": {
+        "enabled": true,
+        "description": "Send a message as the bot",
+        "category": "general",
+        "requires": ["adminRoles"]
+      },
+      "refreshstats": {
+        "enabled": true,
+        "description": "Refresh the server statistics embed",
+        "category": "general",
+        "requires": ["stats"]
+      },
+      "refreshstaff": {
+        "enabled": true,
+        "description": "Refresh the staff embed",
+        "category": "general",
+        "requires": ["staffManagement"]
+      },
+      "features": {
+        "enabled": true,
+        "description": "View and manage bot features",
+        "category": "general",
+        "requires": ["adminRoles"]
+      }
+    },
+    "levels": {
+      "levels": {
+        "enabled": true,
+        "description": "View information about the XP system and available levels",
+        "category": "levels",
+        "requires": ["leveling"]
+      },
+      "rank": {
+        "enabled": true,
+        "description": "Check your level and XP",
+        "category": "levels",
+        "requires": ["leveling"]
+      },
+      "leaderboard": {
+        "enabled": true,
+        "description": "View server leaderboard",
+        "category": "levels",
+        "requires": ["leveling"]
+      },
+      "setbackground": {
+        "enabled": true,
+        "description": "Upload a background image for rank cards",
+        "category": "levels",
+        "requires": ["leveling", "cnsDeveloperRole"]
+      },
+      "synclevelroles": {
+        "enabled": true,
+        "description": "Sync level roles for all members",
+        "category": "levels",
+        "requires": ["leveling", "cnsDeveloperRole"]
+      },
+      "dev-xp-leaderboard": {
+        "enabled": true,
+        "description": "Dev-only: View the top 50 members by total XP",
+        "category": "levels",
+        "requires": ["leveling", "cnsDeveloperRole"]
+      },
+      "recalculate-levels": {
+        "enabled": true,
+        "description": "Dev-only: Recalculate and update all user levels",
+        "category": "levels",
+        "requires": ["leveling", "cnsDeveloperRole"]
+      }
+    },
+    "moderation": {
+      "ban": {
+        "enabled": true,
+        "description": "Bans a user from the server",
+        "category": "moderation",
+        "requires": ["moderation", "modRoles"]
+      },
+      "unban": {
+        "enabled": true,
+        "description": "Unbans a user from the server",
+        "category": "moderation",
+        "requires": ["moderation", "modRoles"]
+      },
+      "kick": {
+        "enabled": true,
+        "description": "Kicks a user from the server",
+        "category": "moderation",
+        "requires": ["moderation", "modRoles"]
+      },
+      "timeout": {
+        "enabled": true,
+        "description": "Times out a user",
+        "category": "moderation",
+        "requires": ["moderation", "modRoles"]
+      },
+      "untimeout": {
+        "enabled": true,
+        "description": "Removes timeout from a user",
+        "category": "moderation",
+        "requires": ["moderation", "modRoles"]
+      },
+      "purge": {
+        "enabled": true,
+        "description": "Deletes all messages from the current channel",
+        "category": "moderation",
+        "requires": ["moderation", "cnsDeveloperRole"]
+      },
+      "setxp": {
+        "enabled": true,
+        "description": "Set XP for a user",
+        "category": "moderation",
+        "requires": ["leveling", "cnsDeveloperRole"]
+      },
+      "tag-sync": {
+        "enabled": true,
+        "description": "Manually sync CNS tag roles",
+        "category": "moderation",
+        "requires": ["tagSync", "modRoles"]
+      },
+      "migrate-message-xp": {
+        "enabled": true,
+        "description": "DEV ONLY: Count all messages per user and update message XP",
+        "category": "moderation",
+        "requires": ["leveling", "cnsDeveloperRole"]
+      }
+    },
+    "roles": {
+      "assign": {
+        "enabled": true,
+        "description": "Assign a role to another user",
+        "category": "roles",
+        "requires": ["adminRoles"]
+      },
+      "remove": {
+        "enabled": true,
+        "description": "Remove a role from another user",
+        "category": "roles",
+        "requires": ["adminRoles"]
+      }
+    },
+    "voiceChannels": {
+      "lock": {
+        "enabled": true,
+        "description": "Lock your voice channel",
+        "category": "voiceChannels",
+        "requires": ["voiceChannels"]
+      },
+      "unlock": {
+        "enabled": true,
+        "description": "Unlock your voice channel",
+        "category": "voiceChannels",
+        "requires": ["voiceChannels"]
+      },
+      "limit": {
+        "enabled": true,
+        "description": "Set user limit for your voice channel",
+        "category": "voiceChannels",
+        "requires": ["voiceChannels"]
+      },
+      "rename": {
+        "enabled": true,
+        "description": "Rename your voice channel",
+        "category": "voiceChannels",
+        "requires": ["voiceChannels"]
+      },
+      "transfer": {
+        "enabled": true,
+        "description": "Transfer ownership of your voice channel",
+        "category": "voiceChannels",
+        "requires": ["voiceChannels"]
+      },
+      "claim": {
+        "enabled": true,
+        "description": "Claim an empty voice channel",
+        "category": "voiceChannels",
+        "requires": ["voiceChannels"]
+      },
+      "allow": {
+        "enabled": true,
+        "description": "Allow a user to join your voice channel",
+        "category": "voiceChannels",
+        "requires": ["voiceChannels"]
+      }
+    }
+  },
+  "events": {
+    "messageCreate": {
+      "enabled": true,
+      "description": "Handle message events (XP, automod)",
+      "requires": ["leveling", "automod"]
+    },
+    "interactionCreate": {
+      "enabled": true,
+      "description": "Handle command interactions",
+      "requires": {}
+    },
+    "guildMemberAdd": {
+      "enabled": true,
+      "description": "Handle member join events",
+      "requires": ["autoAssignRoles"]
+    },
+    "guildMemberRemove": {
+      "enabled": true,
+      "description": "Handle member leave events",
+      "requires": {}
+    },
+    "guildMemberUpdate": {
+      "enabled": true,
+      "description": "Handle member update events (tag sync, staff updates)",
+      "requires": ["tagSync", "staffManagement"]
+    },
+    "voiceStateUpdate": {
+      "enabled": true,
+      "description": "Handle voice state changes (XP, channel management)",
+      "requires": ["leveling", "voiceChannels"]
+    }
+  },
+  "scheduledTasks": {
+    "statsUpdate": {
+      "enabled": true,
+      "description": "Update server statistics every 5 minutes",
+      "interval": 300000,
+      "requires": ["stats"]
+    },
+    "staffEmbedUpdate": {
+      "enabled": true,
+      "description": "Update staff embed every 5 minutes",
+      "interval": 300000,
+      "requires": ["staffManagement"]
+    },
+    "rulesEmbedUpdate": {
+      "enabled": true,
+      "description": "Update rules embed every 5 minutes",
+      "interval": 300000,
+      "requires": ["rules"]
+    },
+    "tagRoleSync": {
+      "enabled": true,
+      "description": "Sync tag roles every 5 minutes",
+      "interval": 300000,
+      "requires": ["tagSync"]
+    },
+    "birthdayCheck": {
+      "enabled": true,
+      "description": "Check for birthdays every hour",
+      "interval": 3600000,
+      "requires": ["birthday"]
+    }
+  }
+} 

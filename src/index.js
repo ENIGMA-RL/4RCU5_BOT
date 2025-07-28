@@ -14,6 +14,8 @@ import { setPresence } from './features/presence/presenceManager.js';
 import { channelsConfig, getEnvironment, rolesConfig } from './config/configLoader.js';
 import { logTagSync } from './utils/botLogger.js';
 import { syncUserTagRole } from './features/tagSync/tagSyncService.js';
+import { log } from './utils/logger.js';
+import featureManager from './services/FeatureManager.js';
 
 // Load environment variables
 dotenv.config();
@@ -44,13 +46,17 @@ const initializeBot = async () => {
 // Start the bot
 initializeBot();
 
-console.log('🔍 Importing scheduleStatsUpdate and scheduleTagRoleSync');
+log.info('Bot starting up - importing scheduleStatsUpdate and scheduleTagRoleSync');
 
 // Event listener for when the bot is ready
 client.on('guildMemberUpdate', (oldMember, newMember) => {
-  console.log('guildMemberUpdate event fired');
+  log.debug('guildMemberUpdate event fired');
   if (oldMember.nickname !== newMember.nickname) {
-    console.log(`${oldMember.user.tag} changed nickname from "${oldMember.nickname}" to "${newMember.nickname}"`);
+    log.info(`${oldMember.user.tag} changed nickname`, {
+      userId: oldMember.id,
+      oldNickname: oldMember.nickname,
+      newNickname: newMember.nickname
+    });
   }
 });
 
@@ -70,7 +76,7 @@ client.on('raw', async (packet) => {
 
       const guild = client.guilds.cache.get(guildId);
       if (!guild) {
-        console.error('Guild not found in cache.');
+        log.error('Guild not found in cache');
         return;
       }
 
@@ -84,77 +90,106 @@ client.on('raw', async (packet) => {
         }
       }
     }
-  } catch (error) {
-    console.error('Error in raw event handler:', error);
-  }
+      } catch (error) {
+      log.error('Error in raw event handler', error);
+    }
 });
 
 client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}!`);
-  console.log(`Environment: ${getEnvironment()}`);
+  log.info(`Bot logged in as ${client.user.tag}`, {
+    environment: getEnvironment(),
+    guildCount: client.guilds.cache.size
+  });
+  
   setPresence(client);
   
   // Log all available guilds for debugging
-  console.log('Available guilds:');
-  client.guilds.cache.forEach(g => {
-    console.log(`  - ${g.name} (${g.id})`);
+  log.debug('Available guilds:', {
+    guilds: Array.from(client.guilds.cache.values()).map(g => ({ id: g.id, name: g.name }))
   });
   
   const GUILD_ID = process.env.GUILD_ID;
-  console.log('Using GUILD_ID from environment:', GUILD_ID);
+  log.info('Using GUILD_ID from environment', { guildId: GUILD_ID });
   let guild = client.guilds.cache.get(GUILD_ID);
   
   // If the specified guild is not found, use the first available guild
   if (!guild && client.guilds.cache.size > 0) {
     guild = client.guilds.cache.first();
-    console.log(`⚠️  Guild ${GUILD_ID} not found, using first available guild: ${guild.name} (${guild.id})`);
+    log.warn(`Guild ${GUILD_ID} not found, using first available guild`, {
+      expectedGuildId: GUILD_ID,
+      fallbackGuildId: guild.id,
+      fallbackGuildName: guild.name
+    });
   }
   
   if (guild) {
-    console.log(`Connected to guild: ${guild.name} (${guild.id})`);
+    log.info(`Connected to guild`, {
+      guildId: guild.id,
+      guildName: guild.name
+    });
     
     // Fetch all members to ensure we have complete member cache
-    console.log('🔄 Fetching all guild members...');
+    log.info('Fetching all guild members');
     try {
       await guild.members.fetch();
-      console.log(`✅ Fetched ${guild.members.cache.size} members`);
+      log.info(`Fetched ${guild.members.cache.size} members`, {
+        guildId: guild.id,
+        memberCount: guild.members.cache.size
+      });
     } catch (error) {
-      console.error('❌ Error fetching members:', error);
+      log.error('Error fetching members', error, { guildId: guild.id });
     }
+    // Log feature status for debugging
+    featureManager.logFeatureStatus(guild);
+
     // Schedule the stats update with proper guild ID
-    console.log('🔍 Calling scheduleStatsUpdate');
-    scheduleStatsUpdate(client, guild.id, channelsConfig().statsChannelId);
+    if (featureManager.isScheduledTaskEnabled('statsUpdate')) {
+      log.info('Calling scheduleStatsUpdate');
+      scheduleStatsUpdate(client, guild.id, channelsConfig().statsChannelId);
+    }
+
     // Schedule the staff embed update
-    scheduleStaffEmbedUpdate(client, guild.id, channelsConfig().staffChannelId);
+    if (featureManager.isScheduledTaskEnabled('staffEmbedUpdate')) {
+      scheduleStaffEmbedUpdate(client, guild.id, channelsConfig().staffChannelId);
+    }
+
     // Auto-update the rules embed
-    await updateRulesEmbed(client, guild.id);
-    // Schedule rules embed updates every 5 minutes
-    setInterval(async () => {
-      try {
-        await updateRulesEmbed(client, guild.id);
-      } catch (error) {
-        console.error('Error updating rules embed:', error);
-      }
-    }, 5 * 60 * 1000);
+    if (featureManager.isFeatureEnabled('rules')) {
+      await updateRulesEmbed(client, guild.id);
+      // Schedule rules embed updates every 5 minutes
+      setInterval(async () => {
+        try {
+          await updateRulesEmbed(client, guild.id);
+        } catch (error) {
+          log.error('Error updating rules embed', error, { guildId: guild.id });
+        }
+      }, 5 * 60 * 1000);
+    }
+
     // Schedule the periodic tag role sync
-    console.log('🔍 Calling scheduleTagRoleSync');
-    scheduleTagRoleSync(client, guild.id);
-    console.log('📊 Stats, staff embed, and tag sync systems initialized');
+    if (featureManager.isScheduledTaskEnabled('tagRoleSync')) {
+      log.info('Calling scheduleTagRoleSync');
+      scheduleTagRoleSync(client, guild.id);
+    }
+
+    log.info('Scheduled tasks initialized', { guildId: guild.id });
     
     // Schedule birthday checks every hour
-    console.log('🎂 Starting birthday check scheduler');
-    setInterval(async () => {
-      try {
-        await checkBirthdays(client);
-      } catch (error) {
-        console.error('Error in birthday check:', error);
-      }
-    }, 60 * 60 * 1000); // Check every hour
-    
-    // Initial birthday check
-    await checkBirthdays(client);
+    if (featureManager.isScheduledTaskEnabled('birthdayCheck')) {
+      log.info('Starting birthday check scheduler');
+      setInterval(async () => {
+        try {
+          await checkBirthdays(client);
+        } catch (error) {
+          log.error('Error in birthday check', error, { guildId: guild.id });
+        }
+      }, 60 * 60 * 1000); // Check every hour
+      
+      // Initial birthday check
+      await checkBirthdays(client);
+    }
   } else {
-    console.error('❌ Could not find guild with ID:', GUILD_ID);
+    log.error('Could not find guild with ID', { guildId: GUILD_ID });
   }
   // Register commands dynamically based on roles
   await registerCommands(client);

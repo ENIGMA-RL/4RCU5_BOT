@@ -1,31 +1,9 @@
-import { VoiceChannel, PermissionsBitField } from 'discord.js';
+import { PermissionsBitField } from 'discord.js';
+import voiceChannelService from '../../services/VoiceChannelService.js';
 import { logVoiceChannel } from '../../utils/botLogger.js';
 
 export const createVoiceChannel = async (guild, user) => {
-  try {
-    const category = guild.channels.cache.get(process.env.VOICE_CATEGORY_ID || '1026537937552298025');
-    const channel = await guild.channels.create({
-      name: `${user.username}'s Channel`,
-      type: 2, // Voice channel
-      parent: category,
-      permissionOverwrites: [
-        {
-          id: guild.id,
-          deny: [PermissionsBitField.Flags.Connect]
-        },
-        {
-          id: user.id,
-          allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.Connect]
-        }
-      ]
-    });
-
-    await logVoiceChannel(guild.client, 'Created', `${user.tag} (${user.id}) created voice channel "${channel.name}" (${channel.id})`);
-    return channel;
-  } catch (error) {
-    console.error('Error creating voice channel:', error);
-    throw error;
-  }
+  return await voiceChannelService.createVoiceChannel(guild, user);
 };
 
 export const getChannelOwnerId = (channel) => {
@@ -42,7 +20,7 @@ export const isChannelOwner = (channel, user) => {
 };
 
 export const deleteVoiceChannel = async (channel) => {
-  if (channel instanceof VoiceChannel && channel.members.size === 0) {
+  if (channel.type === 'GuildVoice' && channel.members.size === 0) {
     try {
       await logVoiceChannel(channel.client, 'Deleted', `Deleted empty voice channel "${channel.name}" (${channel.id})`);
       await channel.delete('Temporary voice channel cleanup');
@@ -103,4 +81,4 @@ export const transferVoiceChannelOwnership = async (channel, newOwner) => {
     console.error('Error transferring voice channel ownership:', error);
     throw error;
   }
-}; 
+};

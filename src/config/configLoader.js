@@ -48,6 +48,7 @@ export function isDev() {
 export const botConfig = () => loadConfig('bot');
 export const channelsConfig = () => loadConfig('channels');
 export const eventsConfig = () => loadConfig('events');
+export const featuresConfig = () => loadConfig('features');
 export const levelSettingsConfig = () => loadConfig('levelSettings');
 export const oauthConfig = () => loadConfig('oauth');
 export const rolesConfig = () => loadConfig('roles');

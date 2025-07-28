@@ -1,18 +1,23 @@
 import { EmbedBuilder } from 'discord.js';
 import { channelsConfig } from '../config/configLoader.js';
+import { log } from './logger.js';
 
 export const logModerationAction = async (client, action, targetUser, moderator, reason, duration = null) => {
   try {
     // Get the guild using GUILD_ID from environment
     const guild = client.guilds.cache.get(process.env.GUILD_ID);
     if (!guild) {
-      console.error(`Guild with ID ${process.env.GUILD_ID} not found in client cache`);
+      log.error(`Guild with ID ${process.env.GUILD_ID} not found in client cache`);
       return;
     }
 
     const logChannel = await guild.channels.fetch(channelsConfig().modLogChannelId).catch(() => null);
     if (!logChannel) {
-      console.error(`Moderation log channel ${channelsConfig().modLogChannelId} not found in guild ${guild.name}`);
+      log.error(`Moderation log channel ${channelsConfig().modLogChannelId} not found in guild ${guild.name}`, null, {
+        guildId: guild.id,
+        guildName: guild.name,
+        channelId: channelsConfig().modLogChannelId
+      });
       return;
     }
 
@@ -40,7 +45,11 @@ export const logModerationAction = async (client, action, targetUser, moderator,
     }
 
   } catch (error) {
-    console.error('Error logging moderation action:', error);
+    log.error('Error logging moderation action', error, {
+      action,
+      targetUserId: targetUser?.id,
+      moderatorId: moderator?.id
+    });
   }
 };
 
@@ -51,7 +60,11 @@ export const logRoleAssignment = async (client, member, role, assignedBy = null)
 
     const logChannel = await guild.channels.fetch(channelsConfig().modLogChannelId).catch(() => null);
     if (!logChannel) {
-      console.error(`Log channel ${channelsConfig().modLogChannelId} not found in guild ${guild.name}`);
+      log.error(`Log channel ${channelsConfig().modLogChannelId} not found in guild ${guild.name}`, null, {
+        guildId: guild.id,
+        guildName: guild.name,
+        channelId: channelsConfig().modLogChannelId
+      });
       return;
     }
 
@@ -70,7 +83,11 @@ export const logRoleAssignment = async (client, member, role, assignedBy = null)
     await logChannel.send({ embeds: [embed] });
 
   } catch (error) {
-    console.error('Error logging role assignment:', error);
+    log.error('Error logging role assignment', error, {
+      memberId: member?.id,
+      roleId: role?.id,
+      assignedById: assignedBy?.id
+    });
   }
 };
 
@@ -137,6 +154,10 @@ const sendModerationDM = async (user, action, reason, duration, guildName) => {
 
     await user.send({ embeds: [embed] });
   } catch (error) {
-    console.error(`Could not send DM to ${user.tag}:`, error.message);
+    log.warn(`Could not send DM to ${user.tag}`, null, {
+      userId: user.id,
+      action,
+      error: error.message
+    });
   }
 }; 

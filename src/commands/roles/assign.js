@@ -1,4 +1,4 @@
-import { ApplicationCommandOptionType } from 'discord.js';
+import { ApplicationCommandOptionType, PermissionsBitField } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
@@ -56,7 +56,7 @@ export const execute = async (interaction) => {
     }
 
     // Check if bot can manage this role
-    if (!interaction.guild.members.me.permissions.has(PermissionFlagsBits.ManageRoles)) {
+    if (!interaction.guild.members.me.permissions.has(PermissionsBitField.Flags.ManageRoles)) {
       await interaction.reply({
         content: '❌ I don\'t have permission to manage roles.',
         flags: 64

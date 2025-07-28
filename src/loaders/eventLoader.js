@@ -1,28 +1,41 @@
 import fs from 'fs';
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import featureManager from '../services/FeatureManager.js';
+import { log } from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 const loadEvents = async (client) => {
-  // Optionally keep these logs if you want to track event loading
-  // console.log('📂 Loading events...');
   const eventFiles = fs.readdirSync(path.join(__dirname, '../events')).filter(file => file.endsWith('.js'));
-  // console.log(`📁 Found ${eventFiles.length} event files: ${eventFiles.join(', ')}`);
+  let loadedCount = 0;
+  let skippedCount = 0;
   
   for (const file of eventFiles) {
-    // console.log(`🔄 Loading event: ${file}`);
     const event = await import(`../events/${file}`);
-    if (event.once) {
-      client.once(event.name, (...args) => event.execute(...args));
-      // console.log(`✅ Loaded once event: ${event.name}`);
+    const eventName = event.name;
+
+    // Check if event is enabled in features config
+    if (featureManager.isEventEnabled(eventName)) {
+      if (event.once) {
+        client.once(eventName, (...args) => event.execute(...args));
+      } else {
+        client.on(eventName, (...args) => event.execute(...args));
+      }
+      loadedCount++;
+      log.debug(`Loaded event: ${eventName}`);
     } else {
-      client.on(event.name, (...args) => event.execute(...args));
-      // console.log(`✅ Loaded event: ${event.name}`);
+      skippedCount++;
+      log.debug(`Skipped disabled event: ${eventName}`);
     }
   }
-  // console.log('🎉 Events loaded successfully!');
+
+  log.info(`Event loading complete`, {
+    loaded: loadedCount,
+    skipped: skippedCount,
+    total: loadedCount + skippedCount
+  });
 };
 
 export default loadEvents; 
