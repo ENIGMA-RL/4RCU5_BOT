@@ -31,6 +31,7 @@ export const execute = async (interaction) => {
       { name: '/ping', description: 'Check bot latency' },
       { name: '/info', description: 'Get bot information' },
       { name: '/funfact', description: 'Get a random useless fun fact!' },
+      { name: '/dadjoke', description: 'Get a random dad joke!' },
       { name: '/birthday', description: 'Set your birthday to receive birthday wishes and a special role!' },
       { name: '/levels', description: 'View information about the XP system and available levels' },
       { name: '/rank', description: 'Check your level and XP' },
