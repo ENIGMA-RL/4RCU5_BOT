@@ -9,6 +9,7 @@
 - Configurable role persistence
 - Leaderboard and rank display
 - Custom rank card backgrounds
+- Configurable command cooldowns with staff exemptions
 
 ### Voice Channel Management
 - Temporary channel creation
@@ -22,12 +23,23 @@
 - Automatic invite link blocking
 - Action logging to designated channels
 - Role-based permission system
+- Channel slowmode management with flexible duration formats (Mod/Admin/Founder/Dev only)
+- Cooldown management with action logging (Admin/Founder/Dev only)
 
 ### Tag Synchronization
 - Real-time role updates
 - Periodic verification (5-minute intervals)
 - Discord API integration for tag status
 - Manual sync commands for admins
+
+### Command Cooldown System
+- Per-user cooldowns for rank and leaderboard commands
+- Configurable duration (default: 30 minutes)
+- Staff role exemptions (Mod, Admin, Founder)
+- In-memory storage with automatic cleanup
+- Simple cooldown setting command (Admin/Founder/Dev only)
+- Support for minutes (m), hours (h), and days (d) formats
+- Action logging to mod-log channel
 
 ### Staff Management
 - Auto-updating staff embeds
@@ -53,6 +65,7 @@ Required configuration files in `src/config/`:
 - `roles.json` - Role IDs and level assignments
 - `channels.json` - Channel IDs for logs and features
 - `levelSettings.json` - XP thresholds and role mappings
+- `commandCooldowns.json` - Command cooldown settings and staff exemptions
 - `bot.json` - Bot settings
 - `staff.json` - Staff role definitions
 - `vcSettings.json` - Voice channel settings
@@ -75,8 +88,8 @@ npm run dev    # Development
 ### Voice Channels (7)
 - `/limit`, `/lock`, `/unlock`, `/rename`, `/transfer`, `/claim`, `/allow`
 
-### Moderation (9)
-- `/ban`, `/unban`, `/kick`, `/timeout`, `/untimeout`, `/purge`, `/setxp`, `/tag-sync`, `/migrate-message-xp`
+### Moderation (11)
+- `/ban`, `/unban`, `/kick`, `/timeout`, `/untimeout`, `/purge`, `/setxp`, `/tag-sync`, `/migrate-message-xp`, `/cooldown`, `/slowmode`
 
 ### Role Management (2)
 - `/assign`, `/remove`
@@ -84,10 +97,10 @@ npm run dev    # Development
 ## Technical Details
 
 ### Architecture
-- **28 Commands** across 5 categories
+- **30 Commands** across 5 categories
 - **6 Event Handlers** for real-time processing
 - **10 Feature Modules** for core functionality
-- **7 Configuration Files** for customization
+- **8 Configuration Files** for customization
 - **SQLite Database** for data persistence
 
 ### Project Structure

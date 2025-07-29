@@ -47,6 +47,7 @@ export function isDev() {
 // Export commonly used configs
 export const botConfig = () => loadConfig('bot');
 export const channelsConfig = () => loadConfig('channels');
+export const commandCooldownsConfig = () => loadConfig('commandCooldowns');
 export const eventsConfig = () => loadConfig('events');
 export const levelSettingsConfig = () => loadConfig('levelSettings');
 export const oauthConfig = () => loadConfig('oauth');
