@@ -1,0 +1,11 @@
+{
+  "commands": {
+    "rank": {
+      "durationMinutes": 30,
+      "enabled": true,
+      "setBy": "enigma_rl",
+      "setAt": "2025-07-29T19:04:14.004Z"
+    }
+  },
+  "lastUpdated": "2025-07-29T19:04:14.005Z"
+}

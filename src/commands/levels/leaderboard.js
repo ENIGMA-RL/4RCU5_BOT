@@ -1,10 +1,10 @@
-import { EmbedBuilder } from 'discord.js';
 import { createCanvas, loadImage, registerFont } from 'canvas';
-import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 import { getTopUsersByType } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
-import { channelsConfig } from '../../config/configLoader.js';
+import { channelsConfig, commandCooldownsConfig } from '../../config/configLoader.js';
 import { shouldBypassChannelRestrictions } from '../../utils/channelUtils.js';
+import { checkCooldown, setCooldown, formatRemainingTime } from '../../utils/cooldownManager.js';
+import { getCooldownDuration } from '../../utils/cooldownStorage.js';
 
 export const data = {
   name: 'leaderboard',
@@ -31,6 +31,32 @@ export const execute = async (interaction) => {
         flags: 64
       });
       return;
+    }
+
+    // Check cooldown
+    const cooldownConfig = commandCooldownsConfig();
+    const leaderboardCooldown = cooldownConfig?.commands?.leaderboard;
+    
+    // Get cooldown duration (prioritize dynamic over config)
+    const cooldownDuration = getCooldownDuration('leaderboard');
+    
+    if (leaderboardCooldown?.enabled && cooldownDuration) {
+      const memberRoles = interaction.member.roles.cache.map(role => role.id);
+      const cooldownCheck = checkCooldown(
+        interaction.user.id, 
+        'leaderboard', 
+        cooldownDuration, 
+        memberRoles
+      );
+      
+      if (cooldownCheck.onCooldown) {
+        const remainingTime = formatRemainingTime(cooldownCheck.remainingTime);
+        await interaction.reply({
+          content: `⏰ You can use this command again in **${remainingTime}**`,
+          flags: 64
+        });
+        return;
+      }
     }
 
     await interaction.deferReply();
@@ -72,6 +98,11 @@ export const execute = async (interaction) => {
     await interaction.editReply({
       files: [{ attachment: buffer, name: 'leaderboard.png' }]
     });
+
+    // Set cooldown after successful execution
+    if (leaderboardCooldown?.enabled && cooldownDuration) {
+      setCooldown(interaction.user.id, 'leaderboard');
+    }
 
   } catch (error) {
     console.error('Error in leaderboard command:', error);

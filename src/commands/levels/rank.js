@@ -4,9 +4,10 @@ import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 import { getUserRank } from '../../database/db.js';
 import fs from 'fs';
-import path from 'path';
-import { channelsConfig, levelSettingsConfig } from '../../config/configLoader.js';
+import { channelsConfig, commandCooldownsConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import { shouldBypassChannelRestrictions as bypassCheck } from '../../utils/channelUtils.js';
+import { checkCooldown, setCooldown, formatRemainingTime } from '../../utils/cooldownManager.js';
+import { getCooldownDuration } from '../../utils/cooldownStorage.js';
 
 export const data = {
   name: 'rank',
@@ -31,6 +32,32 @@ export const execute = async (interaction) => {
         flags: 64
       });
       return;
+    }
+
+    // Check cooldown
+    const cooldownConfig = commandCooldownsConfig();
+    const rankCooldown = cooldownConfig?.commands?.rank;
+    
+    // Get cooldown duration (prioritize dynamic over config)
+    const cooldownDuration = getCooldownDuration('rank');
+    
+    if (rankCooldown?.enabled && cooldownDuration) {
+      const memberRoles = interaction.member.roles.cache.map(role => role.id);
+      const cooldownCheck = checkCooldown(
+        interaction.user.id, 
+        'rank', 
+        cooldownDuration, 
+        memberRoles
+      );
+      
+      if (cooldownCheck.onCooldown) {
+        const remainingTime = formatRemainingTime(cooldownCheck.remainingTime);
+        await interaction.reply({
+          content: `⏰ You can use this command again in **${remainingTime}**`,
+          flags: 64
+        });
+        return;
+      }
     }
 
     // Defer reply
@@ -69,6 +96,11 @@ export const execute = async (interaction) => {
     
     // Send the response
     await interaction.editReply({ files: [attachment] });
+
+    // Set cooldown after successful execution
+    if (rankCooldown?.enabled && cooldownDuration) {
+      setCooldown(interaction.user.id, 'rank');
+    }
 
   } catch (error) {
     console.error('Error in rank command:', error);

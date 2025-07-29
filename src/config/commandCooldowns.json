@@ -1,0 +1,16 @@
+{
+  "commands": {
+    "rank": {
+      "enabled": true,
+      "description": "Show your or another user's rank card"
+    },
+    "leaderboard": {
+      "enabled": true,
+      "description": "View server leaderboard"
+    }
+  },
+  "staffExemptions": {
+    "enabled": true,
+    "roles": ["1026533862316200027", "1390075310090747904", "1390075438646165636"]
+  }
+} 
