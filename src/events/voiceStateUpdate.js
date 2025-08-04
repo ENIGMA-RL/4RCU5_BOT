@@ -2,6 +2,38 @@ import { handleVoiceXP } from '../features/leveling/levelingSystem.js';
 import { PermissionsBitField } from 'discord.js';
 import { channelsConfig, rolesConfig } from '../config/configLoader.js';
 
+// Map of level roles in order from lowest to highest
+const LEVEL_ROLES_ORDER = [
+  'cnsNewcomer',
+  'cnsRookie',
+  'cnsMember',
+  'cnsVeteran',
+  'cnsMaster',
+  'cnsLegend',
+  'cnsExploitDeveloper',
+  'whiteHatHacker',
+  'blackHatHacker'
+];
+
+// Helper function to check if user has required level or higher
+const hasRequiredLevel = (member, requiredLevel) => {
+  const levelRoles = rolesConfig().levelRoles;
+  const requiredIndex = LEVEL_ROLES_ORDER.indexOf(requiredLevel);
+
+  if (requiredIndex === -1) return false;
+
+  // Check if user has the required level or any higher level
+  for (let i = requiredIndex; i < LEVEL_ROLES_ORDER.length; i++) {
+    const roleKey = LEVEL_ROLES_ORDER[i];
+    const roleId = levelRoles[roleKey];
+    if (member.roles.cache.has(roleId)) {
+      return true;
+    }
+  }
+
+  return false;
+};
+
 export const name = 'voiceStateUpdate';
 export const once = false;
 
@@ -58,15 +90,14 @@ export const execute = async (oldState, newState) => {
     const guild = newState.guild;
     const userId = member.id;
 
-    // CNS Rookie role check
-    const rookieRoleId = rolesConfig().levelRoles.cnsRookie;
-    if (!member.roles.cache.has(rookieRoleId)) {
+    // CNS Rookie level or higher check
+    if (!hasRequiredLevel(member, 'cnsRookie')) {
       try {
-        await member.send('❌ You need to reach the **CNS Rookie** level to create a voice channel.');
+        await member.send('❌ You need to reach the **CNS Rookie** level or higher to create a voice channel.');
       } catch (e) {
         // Ignore DM errors
       }
-      console.log(`[JoinToCreate] ${member.user.tag} tried to create a channel but lacks CNS Rookie role.`);
+      console.log(`[JoinToCreate] ${member.user.tag} tried to create a channel but lacks CNS Rookie level or higher.`);
       return;
     }
 

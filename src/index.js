@@ -7,6 +7,7 @@ import { scheduleStatsUpdate, scheduleTagRoleSync, updateStats } from './feature
 import { scheduleStaffEmbedUpdate } from './features/staff/staffEmbed.js';
 import { updateRulesEmbed } from './features/staff/rulesEmbed.js';
 import { checkBirthdays } from './features/birthday/birthdayManager.js';
+import { scheduleLevelRoleSync } from './features/leveling/levelRoleSync.js';
 import { registerCommands } from './loaders/commandRegistrar.js';
 import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
@@ -139,7 +140,10 @@ client.once('ready', async () => {
     // Schedule the periodic tag role sync
     console.log('🔍 Calling scheduleTagRoleSync');
     scheduleTagRoleSync(client, guild.id);
-    console.log('📊 Stats, staff embed, and tag sync systems initialized');
+    // Schedule the periodic level role sync
+    console.log('🔍 Calling scheduleLevelRoleSync');
+    scheduleLevelRoleSync(client, guild.id);
+    console.log('📊 Stats, staff embed, tag sync, and level role sync systems initialized');
     
     // Schedule birthday checks every hour
     console.log('🎂 Starting birthday check scheduler');
