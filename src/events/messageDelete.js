@@ -1,4 +1,4 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, AuditLogEvent } from 'discord.js';
 import { channelsConfig, rolesConfig } from '../config/configLoader.js';
 
 export const name = 'messageDelete';
@@ -22,7 +22,7 @@ export const execute = async (message) => {
     
     // Get the audit logs to see who deleted the message
     const auditLogs = await message.guild.fetchAuditLogs({
-      type: 'MESSAGE_DELETE',
+      type: AuditLogEvent.MessageDelete,
       limit: 1,
     }).catch((error) => {
       console.error(`[DEBUG] Error fetching audit logs:`, error);
@@ -88,7 +88,7 @@ export const execute = async (message) => {
     // Ignore if this was likely a bot command (purge, etc.)
     // Check if multiple messages were deleted around the same time
     const recentDeletions = auditLogs.entries.filter(entry => 
-      entry.action === 'MESSAGE_DELETE' && 
+      entry.action === AuditLogEvent.MessageDelete && 
       Date.now() - entry.createdTimestamp < 1000
     );
 
