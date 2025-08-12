@@ -1,5 +1,6 @@
 import { EmbedBuilder, AuditLogEvent } from 'discord.js';
 import { channelsConfig, rolesConfig } from '../config/configLoader.js';
+import { getCachedMessage, dropCachedMessage } from '../utils/messageCache.js';
 
 export const name = 'messageDelete';
 export const execute = async (message) => {
@@ -111,6 +112,10 @@ async function logMessageDeletion(message, executor) {
   try {
     console.log(`[DEBUG] logMessageDeletion called for message by ${message.author?.tag}`);
     
+    // Get cached message content
+    const cached = getCachedMessage(message.id);
+    console.log(`[DEBUG] Cached message found:`, !!cached);
+    
     const guild = message.guild;
     console.log(`[DEBUG] Guild: ${guild.name} (${guild.id})`);
     
@@ -126,35 +131,38 @@ async function logMessageDeletion(message, executor) {
 
     console.log(`[DEBUG] Log channel found: ${logChannel.name} (${logChannel.id})`);
 
+    // Use cached content or fallback to message content
+    const content = cached?.content?.trim()?.length ? cached.content :
+      (message.content ?? '');
+
+    const attachments = cached ? cached.attachments :
+      (message.attachments ? [...message.attachments.values()].map(a => ({ name: a.name, url: a.url })) : []);
+
+    const embedCount = cached ? cached.embeds : (Array.isArray(message.embeds) ? message.embeds.length : 0);
+
     // Create embed for message deletion log
     const embed = new EmbedBuilder()
       .setTitle('🗑️ Message Deleted')
       .setColor(0xff8800) // Orange for deletions
       .addFields(
-        { name: '👤 Author', value: `${message.author.tag} (${message.author.id})`, inline: true },
+        { name: '👤 Author', value: `${cached?.authorTag ?? message.author?.tag ?? 'Unknown'} (${cached?.authorId ?? message.author?.id ?? 'N/A'})`, inline: true },
         { name: '🛡️ Deleted By', value: `${executor.tag} (${executor.id})`, inline: true },
-        { name: '📝 Channel', value: `${message.channel} (${message.channel.id})`, inline: true },
+        { name: '📝 Channel', value: `${message.channel} (${message.channel?.id ?? cached?.channelId ?? 'N/A'})`, inline: true },
         { name: '🕐 Deleted At', value: `<t:${Math.floor(Date.now() / 1000)}:F>`, inline: false }
       )
       .setTimestamp()
       .setFooter({ text: '4RCU5', iconURL: message.client.user.displayAvatarURL() });
 
-    // Add message content if it exists and isn't too long
-    if (message.content && message.content.length > 0) {
-      const content = message.content.length > 1024 
-        ? message.content.substring(0, 1021) + '...' 
-        : message.content;
-      
-      embed.addFields({
-        name: '💬 Message Content',
-        value: content || '*No text content*',
-        inline: false
-      });
-    }
+    // Add message content
+    embed.addFields({
+      name: '💬 Message Content',
+      value: content?.length ? (content.length > 1024 ? content.slice(0, 1021) + '...' : content) : '*No text content*',
+      inline: false
+    });
 
     // Add attachment info if message had attachments
-    if (message.attachments.size > 0) {
-      const attachmentList = Array.from(message.attachments.values())
+    if (attachments.length > 0) {
+      const attachmentList = attachments
         .map(attachment => `• ${attachment.name} (${attachment.url})`)
         .join('\n');
       
@@ -166,10 +174,10 @@ async function logMessageDeletion(message, executor) {
     }
 
     // Add embed info if message had embeds
-    if (message.embeds.length > 0) {
+    if (embedCount > 0) {
       embed.addFields({
         name: '🔗 Embeds',
-        value: `Message contained ${message.embeds.length} embed(s)`,
+        value: `Message contained ${embedCount} embed(s)`,
         inline: false
       });
     }
@@ -177,6 +185,9 @@ async function logMessageDeletion(message, executor) {
     console.log(`[DEBUG] Sending embed to log channel...`);
     await logChannel.send({ embeds: [embed] });
     console.log(`[DEBUG] Message deletion logged successfully!`);
+
+    // Clean up cache
+    dropCachedMessage(message.id);
 
   } catch (error) {
     console.error('Error logging message deletion:', error);
