@@ -4,13 +4,25 @@ import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'timeout',
-  description: 'Timeouts a user (format: @username duration)',
+  description: 'Timeout a user for a specified duration',
   options: [
     {
-      name: 'user_and_duration',
-      type: ApplicationCommandOptionType.String,
-      description: 'The user to timeout and duration (e.g., @username 1h)',
+      name: 'user',
+      type: ApplicationCommandOptionType.User,
+      description: 'The user to timeout',
       required: true,
+    },
+    {
+      name: 'duration',
+      type: ApplicationCommandOptionType.String,
+      description: 'Duration (e.g., 1h, 30m, 2d)',
+      required: true,
+    },
+    {
+      name: 'reason',
+      type: ApplicationCommandOptionType.String,
+      description: 'Reason for the timeout',
+      required: false,
     },
   ],
   defaultMemberPermissions: null
@@ -30,25 +42,15 @@ export const execute = async (interaction) => {
     return;
   }
 
-  const input = interaction.options.getString('user_and_duration');
+  const user = interaction.options.getUser('user');
+  const durationStr = interaction.options.getString('duration');
+  const reason = interaction.options.getString('reason') || 'No reason provided';
   
-  // Parse the input to extract user mention and duration
-  const mentionMatch = input.match(/<@!?(\d+)>/);
-  if (!mentionMatch) {
-    await interaction.reply({ 
-      content: 'Please mention a user with @username followed by the duration.', 
-      flags: 64 
-    });
-    return;
-  }
-  
-  const userId = mentionMatch[1];
-  const durationStr = input.replace(/<@!?\d+>\s*/, '').trim();
   const durationMs = parseDuration(durationStr);
 
   if (!durationMs) {
     await interaction.reply({ 
-      content: 'Invalid duration format. Please specify a valid duration.', 
+      content: 'Invalid duration format. Please specify a valid duration (e.g., 1h, 30m, 2d).', 
       flags: 64 
     });
     return;
@@ -63,16 +65,7 @@ export const execute = async (interaction) => {
     return;
   }
   
-  const user = await interaction.client.users.fetch(userId).catch(() => null);
-  if (!user) {
-    await interaction.reply({ 
-      content: 'Could not find the specified user.', 
-      flags: 64 
-    });
-    return;
-  }
-  
-  const member = await interaction.guild.members.fetch(userId);
+  const member = await interaction.guild.members.fetch(user.id).catch(() => null);
   if (!member) {
     await interaction.reply({ 
       content: 'That user is not a member of this server.', 
@@ -92,7 +85,7 @@ export const execute = async (interaction) => {
 
   try {
     // Timeout the user
-    await member.timeout(durationMs, `Timeout by ${interaction.user.tag}`);
+    await member.timeout(durationMs, reason);
     
     // Log the action and send DM
     await logModerationAction(
@@ -100,13 +93,13 @@ export const execute = async (interaction) => {
       'Timeout',
       user,
       interaction.user,
-      `Timeout by ${interaction.user.tag}`,
+      reason,
       durationMs
     );
     
     // Send invisible feedback to the moderator
     await interaction.reply({ 
-      content: `✅ Successfully timed out ${user.tag} for ${durationStr}`, 
+      content: `✅ Successfully timed out ${user.tag} for ${durationStr}\n📝 Reason: ${reason}`, 
       flags: 64 
     });
 
