@@ -74,8 +74,8 @@ export const execute = async (interaction) => {
         { name: '/timeout', description: 'Timeout a user (format: @username duration)' },
         { name: '/untimeout', description: 'Remove timeout from user (format: @username)' },
         { name: '/unban', description: 'Unban a user (format: @username or user_id)' },
-        { name: '/tag-sync', description: 'Manually trigger tag role synchronization (mod/dev only)' },
-        { name: '/slowmode', description: 'Set slowmode for current channel (Admin/Founder/Dev only)' }
+        { name: '/tag-sync', description: 'Manually trigger tag role synchronization' },
+        { name: '/slowmode', description: 'Set slowmode for current channel' }
       ];
 
       embed.addFields({
@@ -93,7 +93,7 @@ export const execute = async (interaction) => {
         { name: '/say', description: 'Send a message as the bot' },
         { name: '/refreshstaff', description: 'Refresh the staff embed' },
         { name: '/refreshstats', description: 'Refresh the server statistics embed' },
-        { name: '/cooldown', description: 'Set cooldown duration for commands (Admin/Founder/Dev only)' }
+        { name: '/cooldown', description: 'Set cooldown duration for commands' }
       ];
 
       embed.addFields({

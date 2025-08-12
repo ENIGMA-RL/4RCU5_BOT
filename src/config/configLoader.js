@@ -53,4 +53,5 @@ export const levelSettingsConfig = () => loadConfig('levelSettings');
 export const oauthConfig = () => loadConfig('oauth');
 export const rolesConfig = () => loadConfig('roles');
 export const staffConfig = () => loadConfig('staff');
+export const ticketsConfig = () => loadConfig('tickets');
 export const vcSettingsConfig = () => loadConfig('vcSettings'); 

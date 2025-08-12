@@ -1,3 +1,5 @@
+import { TicketManager } from '../features/tickets/ticketManager.js';
+
 export const name = 'interactionCreate';
 export const execute = async (interaction) => {
   // Handle slash commands
@@ -42,6 +44,60 @@ export const execute = async (interaction) => {
       }
     }
     return;
+  }
+
+  // Handle button interactions for tickets
+  if (interaction.isButton()) {
+    const ticketManager = new TicketManager(interaction.client);
+    
+    if (interaction.customId === 'createTicket') {
+      try {
+        const result = await ticketManager.createTicket(interaction);
+        if (result.success) {
+          await interaction.reply({ 
+            content: result.message, 
+            flags: 64 
+          });
+        } else {
+          await interaction.reply({ 
+            content: `❌ ${result.error}`, 
+            flags: 64 
+          });
+        }
+      } catch (error) {
+        console.error('Error handling create ticket button:', error);
+        await interaction.reply({ 
+          content: '❌ An error occurred while creating the ticket. Please try again.', 
+          flags: 64 
+        });
+      }
+      return;
+    }
+
+    if (interaction.customId.startsWith('closeTicket|')) {
+      try {
+        const [, channelId] = interaction.customId.split('|');
+        const result = await ticketManager.closeTicket(interaction, channelId);
+        if (result.success) {
+          await interaction.reply({ 
+            content: result.message, 
+            flags: 64 
+          });
+        } else {
+          await interaction.reply({ 
+            content: `❌ ${result.error}`, 
+            flags: 64 
+          });
+        }
+      } catch (error) {
+        console.error('Error handling close ticket button:', error);
+        await interaction.reply({ 
+          content: '❌ An error occurred while closing the ticket. Please try again.', 
+          flags: 64 
+        });
+      }
+      return;
+    }
   }
 
   // Handle modal submissions for reply as bot

@@ -1,0 +1,29 @@
+{
+  "enabled": true,
+  "categoryId": "1404952613711253534",
+  "ticketChannelPrefix": "ticket-",
+  "maxOpenTickets": 3,
+  "autoCloseAfterDays": 7,
+  "permissions": {
+    "user": {
+      "ViewChannel": true,
+      "SendMessages": true,
+      "ReadMessageHistory": true,
+      "AttachFiles": true,
+      "EmbedLinks": true,
+      "UseExternalEmojis": true,
+      "AddReactions": true
+    },
+    "staff": {
+      "ViewChannel": true,
+      "SendMessages": true,
+      "ReadMessageHistory": true,
+      "AttachFiles": true,
+      "EmbedLinks": true,
+      "UseExternalEmojis": true,
+      "AddReactions": true,
+      "ManageMessages": true,
+      "ManageChannels": true
+    }
+  }
+} 
