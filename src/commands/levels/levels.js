@@ -10,18 +10,12 @@ export const data = {
 
 export const execute = async (interaction) => {
   try {
-    // Get role mentions
-    const cnsNewcomerRole = interaction.guild.roles.cache.get(rolesConfig().levelRoles.cnsNewcomer);
-    const cnsMemberRole = interaction.guild.roles.cache.get(rolesConfig().levelRoles.cnsMember);
-    const cnsOfficialRole = interaction.guild.roles.cache.get(rolesConfig().cnsOfficialRole);
-    const cnsSpecialMemberRole = interaction.guild.roles.cache.get(rolesConfig().cnsSpecialMemberRole);
-
     const embed = new EmbedBuilder()
       .setTitle('🎯 CNS Leveling System')
       .setDescription('Learn about our XP system and the roles you can unlock!')
       .setColor('#ff7bac')
       .setTimestamp()
-      .setFooter({ text: 'CNS Bot', iconURL: interaction.client.user.displayAvatarURL() });
+      .setFooter({ text: '4RCU5', iconURL: interaction.client.user.displayAvatarURL() });
 
     // XP System Info
     embed.addFields({
@@ -49,69 +43,12 @@ export const execute = async (interaction) => {
       inline: false
     });
 
-    // Role Permissions
-    let permissionsText = '';
-    
-    // CNS Newcomer+ permissions
-    if (cnsNewcomerRole) {
-      permissionsText += `**${cnsNewcomerRole}**\n`;
-      permissionsText += '• Embed links\n• Attach files\n• Add reactions\n\n';
-    }
-
-    // CNS Rookie+ permissions
-    const cnsRookieRole = interaction.guild.roles.cache.get(rolesConfig().levelRoles.cnsRookie);
-    if (cnsRookieRole) {
-      permissionsText += `**${cnsRookieRole}** and above:\n`;
-      permissionsText += '• Create voice channels\n\n';
-    }
-
-    // CNS Member+ permissions
-    if (cnsMemberRole) {
-      permissionsText += `**${cnsMemberRole}** and above:\n`;
-      permissionsText += '• Create threads\n• Use external emotes\n\n';
-    }
-
-    // CNS Official permissions
-    if (cnsOfficialRole) {
-      permissionsText += `**${cnsOfficialRole}**:\n`;
-      permissionsText += '• Use stickers\n• Change nickname\n• CNS Official Lounge\n• Use external emotes\n\n';
-    }
-
-    // CNS Special Member permissions
-    if (cnsSpecialMemberRole) {
-      permissionsText += `**${cnsSpecialMemberRole}**:\n`;
-      permissionsText += '• Create polls\n• Change nickname\n\n';
-    }
-
+    // Reference to roles command
     embed.addFields({
-      name: '🔐 Role Permissions',
-      value: permissionsText,
+      name: '📚 More Information',
+      value: 'Use `/roles` to see detailed information about role permissions and special features!',
       inline: false
     });
-
-    // Special Notes
-    let specialNotes = '';
-    
-    if (cnsOfficialRole) {
-      specialNotes += `• **${cnsOfficialRole}** can only be obtained when you have the CNS server tag equipped\n`;
-      specialNotes += '• It will be removed when you unequip the server tag\n\n';
-    }
-
-    if (cnsSpecialMemberRole) {
-      specialNotes += `• **${cnsSpecialMemberRole}** is reserved for Server Boosters\n\n`;
-    }
-
-    specialNotes += '• All members can use basic commands like `/help`, `/levels`, `/invite`, `/rank`, and `/leaderboard`';
-
-    embed.addFields({
-      name: '📝 Special Notes',
-      value: specialNotes,
-      inline: false
-    });
-
-    embed.addFields(
-      { name: '🔊 Join to Create', value: 'CNS Rookie+ can join the special channel to create their own temporary voice channel. Use /vc commands to manage it!' }
-    );
 
     await interaction.reply({ embeds: [embed] });
 

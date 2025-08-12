@@ -4,13 +4,19 @@ import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'kick',
-  description: 'Kicks a user from the server (format: @username reason)',
+  description: 'Kick a user from the server',
   options: [
     {
-      name: 'user_and_reason',
-      type: ApplicationCommandOptionType.String,
-      description: 'The user to kick and reason (e.g., @username Breaking rules)',
+      name: 'user',
+      type: ApplicationCommandOptionType.User,
+      description: 'The user to kick',
       required: true,
+    },
+    {
+      name: 'reason',
+      type: ApplicationCommandOptionType.String,
+      description: 'Reason for the kick',
+      required: false,
     },
   ],
   defaultMemberPermissions: null
@@ -30,31 +36,10 @@ export const execute = async (interaction) => {
     return;
   }
 
-  const input = interaction.options.getString('user_and_reason');
+  const user = interaction.options.getUser('user');
+  const reason = interaction.options.getString('reason') || 'No reason provided';
   
-  // Parse the input to extract user mention and reason
-  const mentionMatch = input.match(/<@!?(\d+)>/);
-  if (!mentionMatch) {
-    await interaction.reply({ 
-      content: 'Please mention a user with @username followed by the reason.', 
-      flags: 64 
-    });
-    return;
-  }
-  
-  const userId = mentionMatch[1];
-  const reason = input.replace(/<@!?\d+>\s*/, '').trim() || 'No reason provided';
-  
-  const user = await interaction.client.users.fetch(userId).catch(() => null);
-  if (!user) {
-    await interaction.reply({ 
-      content: 'Could not find the specified user.', 
-      flags: 64 
-    });
-    return;
-  }
-  
-  const member = await interaction.guild.members.fetch(userId);
+  const member = await interaction.guild.members.fetch(user.id).catch(() => null);
   if (!member) {
     await interaction.reply({ 
       content: 'That user is not a member of this server.', 
@@ -87,7 +72,7 @@ export const execute = async (interaction) => {
     
     // Send invisible feedback to the moderator
     await interaction.reply({ 
-      content: `✅ Successfully kicked ${user.tag} for: ${reason}`, 
+      content: `✅ Successfully kicked ${user.tag}\n📝 Reason: ${reason}`, 
       flags: 64 
     });
     

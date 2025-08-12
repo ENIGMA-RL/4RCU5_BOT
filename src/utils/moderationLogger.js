@@ -3,10 +3,14 @@ import { channelsConfig } from '../config/configLoader.js';
 
 export const logModerationAction = async (client, action, targetUser, moderator, reason, duration = null) => {
   try {
-    // Get the guild using GUILD_ID from environment
-    const guild = client.guilds.cache.get(process.env.GUILD_ID);
+    // Get the guild using the same logic as the main bot
+    let guild = client.guilds.cache.get(process.env.GUILD_ID);
+    if (!guild && client.guilds.cache.size > 0) {
+      guild = client.guilds.cache.first();
+    }
+    
     if (!guild) {
-      console.error(`Guild with ID ${process.env.GUILD_ID} not found in client cache`);
+      console.error('No guild found for moderation logging');
       return;
     }
 
@@ -25,7 +29,8 @@ export const logModerationAction = async (client, action, targetUser, moderator,
         { name: '🛡️ Moderator', value: `${moderator.tag} (${moderator.id})`, inline: true },
         { name: '📝 Reason', value: reason || 'No reason provided', inline: false }
       )
-      .setTimestamp();
+      .setTimestamp()
+      .setFooter({ text: '4RCU5', iconURL: client.user.displayAvatarURL() });
 
     if (duration) {
       embed.addFields({ name: '⏱️ Duration', value: formatDuration(duration), inline: true });
@@ -46,8 +51,16 @@ export const logModerationAction = async (client, action, targetUser, moderator,
 
 export const logRoleAssignment = async (client, member, role, assignedBy = null) => {
   try {
-    const guild = client.guilds.cache.get(process.env.GUILD_ID);
-    if (!guild) return;
+    // Get the guild using the same logic as the main bot
+    let guild = client.guilds.cache.get(process.env.GUILD_ID);
+    if (!guild && client.guilds.cache.size > 0) {
+      guild = client.guilds.cache.first();
+    }
+    
+    if (!guild) {
+      console.error('No guild found for role assignment logging');
+      return;
+    }
 
     const logChannel = await guild.channels.fetch(channelsConfig().modLogChannelId).catch(() => null);
     if (!logChannel) {
@@ -64,7 +77,8 @@ export const logRoleAssignment = async (client, member, role, assignedBy = null)
         { name: '🎭 Role', value: `${role.name} (${role.id})`, inline: true },
         { name: '📝 Assigned By', value: assignedBy ? `${assignedBy.tag} (${assignedBy.id})` : 'Auto-assignment (Welcome)', inline: true }
       )
-      .setTimestamp();
+      .setTimestamp()
+      .setFooter({ text: '4RCU5', iconURL: client.user.displayAvatarURL() });
 
     // Send to log channel
     await logChannel.send({ embeds: [embed] });

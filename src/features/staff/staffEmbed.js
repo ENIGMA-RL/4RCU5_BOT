@@ -1,6 +1,6 @@
-import { EmbedBuilder } from 'discord.js';
+import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { staffConfig, rolesConfig, channelsConfig } from '../../config/configLoader.js';
-
+import { TicketManager } from '../tickets/ticketManager.js';
 
 export async function updateStaffEmbed(client, guildId, channelId) {
   let guild, channel;
@@ -66,6 +66,29 @@ export async function updateStaffEmbed(client, guildId, channelId) {
       });
     }
 
+    // Add spacing field
+    embed.addFields({
+      name: '',
+      value: '',
+      inline: false,
+    });
+
+    // Add support message field
+    embed.addFields({
+      name: '📋 Support',
+      value: 'Need help? Click the button below to create a support ticket.',
+      inline: false,
+    });
+
+    // Add ticket button as a field
+    const ticketButton = new ActionRowBuilder()
+      .addComponents(
+        new ButtonBuilder()
+          .setCustomId('createTicket')
+          .setLabel('Open Support Ticket')
+          .setStyle(ButtonStyle.Primary)
+      );
+
     // Add last updated footer with avatar
     embed.setFooter({ 
       text: '4RCU5', 
@@ -76,9 +99,9 @@ export async function updateStaffEmbed(client, guildId, channelId) {
     const messages = await channel.messages.fetch({ limit: 10 });
     const staffMsg = messages.find(msg => msg.embeds[0]?.title === '👥 CNS Staff Team');
     if (staffMsg) {
-      await staffMsg.edit({ embeds: [embed] });
+      await staffMsg.edit({ embeds: [embed], components: [ticketButton] });
     } else {
-      await channel.send({ embeds: [embed] });
+      await channel.send({ embeds: [embed], components: [ticketButton] });
     }
   } catch (error) {
     console.error('Error updating staff embed:', error);
