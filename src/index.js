@@ -1,7 +1,7 @@
 // Create the initial folder structure and main bot file
 
 // Import necessary modules
-import { Client, GatewayIntentBits, Collection } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import dotenv from 'dotenv';
 import { scheduleStatsUpdate, scheduleTagRoleSync, updateStats } from './features/stats/statsUpdater.js';
 import { scheduleStaffEmbedUpdate } from './features/staff/staffEmbed.js';
@@ -25,8 +25,10 @@ const client = new Client({
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers, // REQUIRED for member updates!
     GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent, // REQUIRED for message content access
     GatewayIntentBits.GuildVoiceStates
-  ]
+  ],
+  partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User]
 });
 
 // Initialize commands collection

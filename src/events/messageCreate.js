@@ -1,11 +1,12 @@
 import { handleMessageXP } from '../features/leveling/levelingSystem.js';
 import { rolesConfig } from '../config/configLoader.js';
 import { logInviteBlock } from '../utils/botLogger.js';
+import { cacheMessage } from '../utils/messageCache.js';
 
 export const name = 'messageCreate';
 export const execute = async (message) => {
-  // Ignore bot messages
-  if (message.author.bot) return;
+  if (message.author?.bot) return;
+  cacheMessage(message);
 
   // Ignore messages in DMs
   if (!message.guild) return;
