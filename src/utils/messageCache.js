@@ -1,14 +1,15 @@
-type CachedMessage = {
-  id: string;
-  guildId: string | null;
-  channelId: string | null;
-  authorId: string | null;
-  authorTag: string | null;
-  content: string;
-  attachments: { name: string; url: string }[];
-  embeds: number;
-  createdTimestamp: number | null;
-};
+/**
+ * @typedef {Object} CachedMessage
+ * @property {string} id
+ * @property {string|null} guildId
+ * @property {string|null} channelId
+ * @property {string|null} authorId
+ * @property {string|null} authorTag
+ * @property {string} content
+ * @property {Array<{name: string, url: string}>} attachments
+ * @property {number} embeds
+ * @property {number|null} createdTimestamp
+ */
 
 const cache = new Map();
 const maxEntries = 5000;
