@@ -1,6 +1,7 @@
 import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getTopUsersByType } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
+import path from 'path';
 import { channelsConfig, commandCooldownsConfig } from '../../config/configLoader.js';
 import { shouldBypassChannelRestrictions } from '../../utils/channelUtils.js';
 import { checkCooldown, setCooldown, formatRemainingTime } from '../../utils/cooldownManager.js';
@@ -129,13 +130,30 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
   const height = 856;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
+  
+  console.log('Canvas created successfully, dimensions:', canvas.width, 'x', canvas.height);
+  
+  // Test basic canvas operations
+  try {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, 10, 10);
+    console.log('Basic canvas operations working');
+  } catch (error) {
+    console.error('Basic canvas operations failed:', error);
+  }
 
   // Load and draw background image (same as rank card)
-  const backgroundPath = './src/assets/backgrounds/rank-background.png';
-  if (fs.existsSync(backgroundPath)) {
-    const background = await loadImage(backgroundPath);
-    ctx.drawImage(background, 0, 0, width, height);
-  }
+  const backgroundPath = path.join(__dirname, '../../assets/backgrounds/rank-background.png');
+  console.log('Current working directory:', process.cwd());
+  console.log('__dirname:', __dirname);
+  console.log('Background path resolved to:', backgroundPath);
+  console.log('File exists:', fs.existsSync(backgroundPath));
+  console.log('File stats:', fs.existsSync(backgroundPath) ? fs.statSync(backgroundPath) : 'File not found');
+  
+  const background = await loadImage(backgroundPath);
+  console.log('Background image loaded successfully, dimensions:', background.width, 'x', background.height);
+  ctx.drawImage(background, 0, 0, width, height);
+  console.log('Background image drawn to canvas');
 
   // Card settings
   const cardX = 40;
@@ -201,14 +219,24 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
       ctx.fillText(`#${(page - 1) * 10 + i + 1}`, col1X + 12, y + 28);
       // Avatar
       if (user.avatarURL) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(col1X + 38, y + 18, avatarSize / 2, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        const avatarImg = await loadImage(user.avatarURL);
-        ctx.drawImage(avatarImg, col1X + 20, y, avatarSize, avatarSize);
-        ctx.restore();
+        try {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(col1X + 38, y + 18, avatarSize / 2, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          const avatarImg = await loadImage(user.avatarURL);
+          ctx.drawImage(avatarImg, col1X + 20, y, avatarSize, avatarSize);
+          ctx.restore();
+        } catch (error) {
+          console.error('Error loading avatar for user:', user.username, error);
+          // Draw a placeholder circle if avatar fails to load
+          ctx.restore();
+          ctx.fillStyle = '#666';
+          ctx.beginPath();
+          ctx.arc(col1X + 38, y + 18, avatarSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       // Username
       ctx.font = 'bold 18px Montserrat, Arial';
@@ -229,14 +257,24 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
       ctx.textAlign = 'right';
       ctx.fillText(`#${(page - 1) * 10 + i + 1}`, col2X + 12, y + 28);
       if (vuser.avatarURL) {
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(col2X + 38, y + 18, avatarSize / 2, 0, Math.PI * 2);
-        ctx.closePath();
-        ctx.clip();
-        const avatarImg = await loadImage(vuser.avatarURL);
-        ctx.drawImage(avatarImg, col2X + 20, y, avatarSize, avatarSize);
-        ctx.restore();
+        try {
+          ctx.save();
+          ctx.beginPath();
+          ctx.arc(col2X + 38, y + 18, avatarSize / 2, 0, Math.PI * 2);
+          ctx.closePath();
+          ctx.clip();
+          const avatarImg = await loadImage(vuser.avatarURL);
+          ctx.drawImage(avatarImg, col2X + 20, y, avatarSize, avatarSize);
+          ctx.restore();
+        } catch (error) {
+          console.error('Error loading avatar for user:', vuser.username, error);
+          // Draw a placeholder circle if avatar fails to load
+          ctx.restore();
+          ctx.fillStyle = '#666';
+          ctx.beginPath();
+          ctx.arc(col2X + 38, y + 18, avatarSize / 2, 0, Math.PI * 2);
+          ctx.fill();
+        }
       }
       ctx.font = 'bold 18px Montserrat, Arial';
       ctx.fillStyle = '#fff';

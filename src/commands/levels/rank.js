@@ -4,6 +4,7 @@ import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 import { getUserRank } from '../../database/db.js';
 import fs from 'fs';
+import path from 'path';
 import { channelsConfig, commandCooldownsConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import { shouldBypassChannelRestrictions as bypassCheck } from '../../utils/channelUtils.js';
 import { checkCooldown, setCooldown, formatRemainingTime } from '../../utils/cooldownManager.js';
@@ -87,7 +88,7 @@ export const execute = async (interaction) => {
     
     // Register custom font (Montserrat) if available
     try {
-      registerFont('./src/assets/fonts/Montserrat-Bold.ttf', { family: 'Montserrat', weight: 'bold' });
+      registerFont(path.join(__dirname, '../../assets/fonts/Montserrat-Bold.ttf'), { family: 'Montserrat', weight: 'bold' });
     } catch (e) {}
 
     // Create rank card
@@ -134,7 +135,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   const ctx = canvas.getContext('2d');
 
   // Draw background
-  const backgroundPath = './src/assets/backgrounds/rank-background.png';
+  const backgroundPath = path.join(__dirname, '../../assets/backgrounds/rank-background.png');
   if (fs.existsSync(backgroundPath)) {
     try {
       const background = await loadImage(backgroundPath);
@@ -180,7 +181,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
 
   // Draw CNS-ascii logo in top right of card
   try {
-    const asciiLogo = await loadImage('./src/assets/images/cns-ascii.png');
+    const asciiLogo = await loadImage(path.join(__dirname, '../../assets/images/cns-ascii.png'));
     const logoWidth = 210;
     const logoHeight = asciiLogo.height * (logoWidth / asciiLogo.width);
     const logoX = cardX + cardW - logoWidth - 32;
