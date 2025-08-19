@@ -35,17 +35,20 @@ export const execute = async (interaction) => {
 
   // Get top 50 users by total XP
   const users = await getTopUsersByType('total', 50);
-  const pagedUsers = users.slice(offset, offset + pageSize);
-
-  // Fetch Discord usernames
-  const userInfos = await Promise.all(pagedUsers.map(async (u) => {
+  
+  // Filter out deleted users and fetch Discord usernames
+  const userInfos = [];
+  for (const u of users) {
     try {
       const userObj = await interaction.client.users.fetch(u.user_id);
-      return { ...u, username: userObj.username };
+      userInfos.push({ ...u, username: userObj.username });
     } catch {
-      return { ...u, username: u.user_id };
+      // Skip deleted users - they won't appear in the leaderboard
+      continue;
     }
-  }));
+  }
+  
+  const pagedUsers = userInfos.slice(offset, offset + pageSize);
 
   const embed = new EmbedBuilder()
     .setTitle('🛠️ Top 50 Members by Total XP')
@@ -54,8 +57,8 @@ export const execute = async (interaction) => {
     .setTimestamp();
 
   let leaderboard = '';
-  for (let i = 0; i < userInfos.length; i++) {
-    const user = userInfos[i];
+  for (let i = 0; i < pagedUsers.length; i++) {
+    const user = pagedUsers[i];
     leaderboard += `**#${offset + i + 1}**  ${user.username} — ${user.xp + user.voice_xp} XP\n`;
   }
   if (!leaderboard) leaderboard = 'No users found.';

@@ -77,30 +77,38 @@ export const execute = async (interaction) => {
     const textUsers = await getTopUsersByType('message', 1000); // get all, will slice below
     const voiceUsers = await getTopUsersByType('voice', 1000);
 
-    // Slice for pagination
-    const pagedTextUsers = textUsers.slice(offset, offset + pageSize);
-    const pagedVoiceUsers = voiceUsers.slice(offset, offset + pageSize);
+    // Filter out deleted users and fetch Discord user objects for avatars/usernames
+    const textUserInfos = [];
+    const voiceUserInfos = [];
+    
+    // Process text users
+    for (const u of textUsers) {
+      try {
+        const user = await interaction.client.users.fetch(u.user_id);
+        textUserInfos.push({ ...u, username: user.username, avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }) });
+      } catch {
+        // Skip deleted users - they won't appear in the leaderboard
+        continue;
+      }
+    }
+    
+    // Process voice users
+    for (const u of voiceUsers) {
+      try {
+        const user = await interaction.client.users.fetch(u.user_id);
+        voiceUserInfos.push({ ...u, username: user.username, avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }) });
+      } catch {
+        // Skip deleted users - they won't appear in the leaderboard
+        continue;
+      }
+    }
 
-    // Fetch Discord user objects for avatars/usernames
-    const textUserInfos = await Promise.all(pagedTextUsers.map(async (u) => {
-      try {
-        const user = await interaction.client.users.fetch(u.user_id);
-        return { ...u, username: user.username, avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }) };
-      } catch {
-        return { ...u, username: u.user_id, avatarURL: null };
-      }
-    }));
-    const voiceUserInfos = await Promise.all(pagedVoiceUsers.map(async (u) => {
-      try {
-        const user = await interaction.client.users.fetch(u.user_id);
-        return { ...u, username: user.username, avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }) };
-      } catch {
-        return { ...u, username: u.user_id, avatarURL: null };
-      }
-    }));
+    // Slice for pagination (after filtering deleted users)
+    const pagedTextUsers = textUserInfos.slice(offset, offset + pageSize);
+    const pagedVoiceUsers = voiceUserInfos.slice(offset, offset + pageSize);
 
     // Create leaderboard card image
-    const buffer = await createLeaderboardCard(textUserInfos, voiceUserInfos, page);
+    const buffer = await createLeaderboardCard(pagedTextUsers, pagedVoiceUsers, page);
     await interaction.editReply({
       files: [{ attachment: buffer, name: 'leaderboard.png' }]
     });
