@@ -2,10 +2,15 @@ import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getTopUsersByType } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { channelsConfig, commandCooldownsConfig } from '../../config/configLoader.js';
 import { shouldBypassChannelRestrictions } from '../../utils/channelUtils.js';
 import { checkCooldown, setCooldown, formatRemainingTime } from '../../utils/cooldownManager.js';
 import { getCooldownDuration } from '../../utils/cooldownStorage.js';
+
+// ES module equivalent of __dirname
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 export const data = {
   name: 'leaderboard',
