@@ -243,9 +243,17 @@ export async function cleanupDeletedUsers(client) {
         // Try to fetch user from Discord
         const discordUser = await client.users.fetch(user.user_id);
         
-        // Check if user is in the server (we need to check guild membership)
-        // For now, we'll just check if the user object exists
-        // In a full implementation, you'd also check guild membership
+        // Check for suspicious usernames that indicate deleted users
+        if (discordUser.username.toLowerCase().includes('deleted_user') || 
+            discordUser.username.toLowerCase().includes('unknown') ||
+            discordUser.username.toLowerCase().includes('deleted') ||
+            discordUser.username.toLowerCase().includes('user') && discordUser.username.match(/^\d+$/)) {
+          console.log(`🗑️ Removing user with suspicious username: ${discordUser.username} (${user.user_id})`);
+          const deleteStmt = db.prepare('DELETE FROM users WHERE user_id = ?');
+          deleteStmt.run(user.user_id);
+          deletedCount++;
+          continue;
+        }
         
         // Update user's username in case it changed
         const updateStmt = db.prepare(`
@@ -277,6 +285,11 @@ export async function cleanupDeletedUsers(client) {
           leftServerCount++;
         } else {
           console.log(`⚠️ Unknown error for user ${user.user_id}:`, error.code);
+          // If we can't fetch the user for any reason, remove them
+          console.log(`🗑️ Removing user due to fetch error: ${user.user_id}`);
+          const deleteStmt = db.prepare('DELETE FROM users WHERE user_id = ?');
+          deleteStmt.run(user.user_id);
+          deletedCount++;
         }
       }
     }

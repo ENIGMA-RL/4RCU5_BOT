@@ -93,7 +93,9 @@ export const execute = async (interaction) => {
         { name: '/say', description: 'Send a message as the bot' },
         { name: '/refreshstaff', description: 'Refresh the staff embed' },
         { name: '/refreshstats', description: 'Refresh the server statistics embed' },
-        { name: '/cooldown', description: 'Set cooldown duration for commands' }
+        { name: '/cooldown', description: 'Set cooldown duration for commands' },
+        { name: '/cleanup-database', description: 'Manually trigger database cleanup to remove deleted users' },
+        { name: '/force-cleanup', description: 'Force immediate cleanup of all suspicious and deleted users' }
       ];
 
       embed.addFields({
