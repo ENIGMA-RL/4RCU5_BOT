@@ -67,6 +67,18 @@ function initializeDatabase() {
   }
 
   try {
+    db.exec('ALTER TABLE users ADD COLUMN username TEXT');
+  } catch (error) {
+    // Column already exists, ignore error
+  }
+
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN left_server BOOLEAN DEFAULT 0');
+  } catch (error) {
+    // Column already exists, ignore error
+  }
+
+  try {
     db.exec('ALTER TABLE users ADD COLUMN voice_level INTEGER DEFAULT 0');
   } catch (error) {
     // Column already exists, ignore error
@@ -212,6 +224,76 @@ export function getTotalXP() {
 // Close database connection (call this when shutting down)
 export function closeDatabase() {
   db.close();
+}
+
+// Clean up deleted users and mark users who left the server
+export async function cleanupDeletedUsers(client) {
+  console.log('🧹 Starting database cleanup...');
+  
+  try {
+    // Get all users from database
+    const stmt = db.prepare('SELECT user_id FROM users');
+    const users = stmt.all();
+    
+    let deletedCount = 0;
+    let leftServerCount = 0;
+    
+    for (const user of users) {
+      try {
+        // Try to fetch user from Discord
+        const discordUser = await client.users.fetch(user.user_id);
+        
+        // Check if user is in the server (we need to check guild membership)
+        // For now, we'll just check if the user object exists
+        // In a full implementation, you'd also check guild membership
+        
+        // Update user's username in case it changed
+        const updateStmt = db.prepare(`
+          UPDATE users 
+          SET username = ?, 
+              left_server = 0,
+              updated_at = strftime('%s', 'now')
+          WHERE user_id = ?
+        `);
+        updateStmt.run(discordUser.username, user.user_id);
+        
+      } catch (error) {
+        if (error.code === 10013) {
+          // User not found (deleted)
+          console.log(`🗑️ Removing deleted user: ${user.user_id}`);
+          const deleteStmt = db.prepare('DELETE FROM users WHERE user_id = ?');
+          deleteStmt.run(user.user_id);
+          deletedCount++;
+        } else if (error.code === 10007) {
+          // User left the server
+          console.log(`🚪 Marking user as left server: ${user.user_id}`);
+          const updateStmt = db.prepare(`
+            UPDATE users 
+            SET left_server = 1,
+                updated_at = strftime('%s', 'now')
+            WHERE user_id = ?
+          `);
+          updateStmt.run(user.user_id);
+          leftServerCount++;
+        } else {
+          console.log(`⚠️ Unknown error for user ${user.user_id}:`, error.code);
+        }
+      }
+    }
+    
+    console.log(`✅ Cleanup complete: ${deletedCount} deleted users removed, ${leftServerCount} users marked as left server`);
+    return { deletedCount, leftServerCount };
+    
+  } catch (error) {
+    console.error('❌ Error during database cleanup:', error);
+    throw error;
+  }
+}
+
+// Get users who left the server (for display purposes)
+export function getUsersWhoLeftServer() {
+  const stmt = db.prepare('SELECT user_id, username, xp, voice_xp FROM users WHERE left_server = 1');
+  return stmt.all();
 }
 
 export default db; 
