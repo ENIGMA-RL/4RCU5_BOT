@@ -36,27 +36,43 @@ export const execute = async (interaction) => {
   // Get top 50 users by total XP
   const users = await getTopUsersByType('total', 50);
   
-  // Filter out deleted users and fetch Discord usernames
+  // Extract all user IDs for batch fetching
+  const allUserIds = users.map(u => u.user_id);
+  
+  // Batch fetch all users from Discord API (much faster than individual calls)
+  const discordUsers = await Promise.all(
+    allUserIds.map(id => 
+      interaction.client.users.fetch(id).catch(() => null)
+    )
+  );
+  
+  // Create a map for fast user lookup
+  const userMap = new Map();
+  discordUsers.forEach((user, index) => {
+    if (user) {
+      userMap.set(allUserIds[index], user);
+    }
+  });
+  
+  // Filter out deleted users and check server membership efficiently
   const userInfos = [];
   for (const u of users) {
-    try {
-      const userObj = await interaction.client.users.fetch(u.user_id);
-      
-      // Check if user is still in the server
-      const guildMember = await interaction.guild.members.fetch(u.user_id).catch(() => null);
-      const isInServer = guildMember !== null;
-      
-      // Only include users who are currently in the server
-      if (isInServer) {
-        userInfos.push({ ...u, username: userObj.username, isInServer: true });
-        console.log(`✅ User: ${userObj.username} (${u.user_id}) - In server: ${isInServer}`);
-      } else {
-        console.log(`🚪 Skipping user who left server: ${userObj.username} (${u.user_id})`);
-      }
-    } catch (error) {
-      // Skip deleted users - they won't appear in the leaderboard
+    const userObj = userMap.get(u.user_id);
+    if (!userObj) {
       console.log(`❌ Skipping deleted user: ${u.user_id}`);
       continue;
+    }
+    
+    // Check if user is still in the server using existing cache (no API call needed)
+    const guildMember = interaction.guild.members.cache.get(u.user_id);
+    const isInServer = guildMember !== null;
+    
+    // Only include users who are currently in the server
+    if (isInServer) {
+      userInfos.push({ ...u, username: userObj.username, isInServer: true });
+      console.log(`✅ User: ${userObj.username} (${u.user_id}) - In server: ${isInServer}`);
+    } else {
+      console.log(`🚪 Skipping user who left server: ${userObj.username} (${u.user_id})`);
     }
   }
   

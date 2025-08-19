@@ -12,6 +12,27 @@ import { getCooldownDuration } from '../../utils/cooldownStorage.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Simple cache for user data to avoid repeated fetches
+const userCache = new Map();
+const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
+
+// Helper function to get cached user data
+function getCachedUser(userId) {
+  const cached = userCache.get(userId);
+  if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+    return cached.user;
+  }
+  return null;
+}
+
+// Helper function to cache user data
+function cacheUser(userId, user) {
+  userCache.set(userId, {
+    user: user,
+    timestamp: Date.now()
+  });
+}
+
 export const data = {
   name: 'leaderboard',
   description: 'View CNS leaderboard',
@@ -74,70 +95,57 @@ export const execute = async (interaction) => {
     const offset = (page - 1) * pageSize;
 
     // Get all users for both text and voice
-    const textUsers = await getTopUsersByType('message', 1000); // get all, will slice below
-    const voiceUsers = await getTopUsersByType('voice', 1000);
+    const allUsers = await getTopUsersByType('total', 1000); // Get all users once
+    const textUsers = allUsers.sort((a, b) => b.xp - a.xp);
+    const voiceUsers = allUsers.sort((a, b) => b.voice_xp - a.voice_xp);
 
-    // Filter out deleted users and fetch Discord user objects for avatars/usernames
-    const textUserInfos = [];
-    const voiceUserInfos = [];
+    // Extract all user IDs for batch fetching
+    const allUserIds = [...new Set([...textUsers.map(u => u.user_id), ...voiceUsers.map(u => u.user_id)])];
     
-    console.log(`🔍 Processing ${textUsers.length} text users and ${voiceUsers.length} voice users`);
+    console.log(`🔍 Processing ${textUsers.length} text users and ${voiceUsers.length} voice users (${allUserIds.length} unique users)`);
     
-    // Process text users
-    for (const u of textUsers) {
-      try {
-        const user = await interaction.client.users.fetch(u.user_id);
-        
-        // Check if user is still in the server
-        const guildMember = await interaction.guild.members.fetch(u.user_id).catch(() => null);
-        const isInServer = guildMember !== null;
-        
-        // Only include users who are currently in the server
-        if (isInServer) {
-          textUserInfos.push({ 
-            ...u, 
-            username: user.username, 
-            avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
-            isInServer: true
-          });
-          console.log(`✅ Text user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
-        } else {
-          console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
-        }
-      } catch (error) {
-        // Skip deleted users - they won't appear in the leaderboard
-        console.log(`❌ Skipping deleted text user: ${u.user_id}`);
-        continue;
+    // Check cache first and only fetch uncached users
+    const uncachedIds = [];
+    const cachedUsers = new Map();
+    
+    for (const userId of allUserIds) {
+      const cached = getCachedUser(userId);
+      if (cached) {
+        cachedUsers.set(userId, cached);
+      } else {
+        uncachedIds.push(userId);
       }
     }
     
-    // Process voice users
-    for (const u of voiceUsers) {
-      try {
-        const user = await interaction.client.users.fetch(u.user_id);
-        
-        // Check if user is still in the server
-        const guildMember = await interaction.guild.members.fetch(u.user_id).catch(() => null);
-        const isInServer = guildMember !== null;
-        
-        // Only include users who are currently in the server
-        if (isInServer) {
-          voiceUserInfos.push({ 
-            ...u, 
-            username: user.username, 
-            avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
-            isInServer: true
-          });
-          console.log(`✅ Voice user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
-        } else {
-          console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
+    console.log(`💾 Using ${cachedUsers.size} cached users, fetching ${uncachedIds.length} new users`);
+    
+    // Batch fetch only uncached users from Discord API
+    let newUsers = [];
+    if (uncachedIds.length > 0) {
+      newUsers = await Promise.all(
+        uncachedIds.map(id => 
+          interaction.client.users.fetch(id).catch(() => null)
+        )
+      );
+      
+      // Cache the newly fetched users
+      newUsers.forEach((user, index) => {
+        if (user) {
+          const userId = uncachedIds[index];
+          cacheUser(userId, user);
+          cachedUsers.set(userId, user);
         }
-      } catch (error) {
-        // Skip deleted users - they won't appear in the leaderboard
-        console.log(`❌ Skipping deleted voice user: ${u.user_id}`);
-        continue;
-      }
+      });
     }
+    
+    // Create a map for fast user lookup (combines cached and new users)
+    const userMap = cachedUsers;
+    
+    // Process text and voice users in parallel using cached data
+    const [textUserInfos, voiceUserInfos] = await Promise.all([
+      processTextUsers(textUsers, userMap, interaction.guild),
+      processVoiceUsers(voiceUsers, userMap, interaction.guild)
+    ]);
     
     console.log(`📊 After filtering: ${textUserInfos.length} valid text users, ${voiceUserInfos.length} valid voice users`);
 
@@ -187,6 +195,70 @@ export const execute = async (interaction) => {
     }
   }
 };
+
+// Helper function to process text users efficiently
+async function processTextUsers(textUsers, userMap, guild) {
+  const textUserInfos = [];
+  
+  for (const u of textUsers) {
+    const user = userMap.get(u.user_id);
+    if (!user) {
+      console.log(`❌ Skipping deleted text user: ${u.user_id}`);
+      continue;
+    }
+    
+    // Check if user is still in the server using existing cache (no API call needed)
+    const guildMember = guild.members.cache.get(u.user_id);
+    const isInServer = guildMember !== null;
+    
+    // Only include users who are currently in the server
+    if (isInServer) {
+      textUserInfos.push({ 
+        ...u, 
+        username: user.username, 
+        avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
+        isInServer: true
+      });
+      console.log(`✅ Text user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
+    } else {
+      console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
+    }
+  }
+  
+  return textUserInfos;
+}
+
+// Helper function to process voice users efficiently
+async function processVoiceUsers(voiceUsers, userMap, guild) {
+  const voiceUserInfos = [];
+  
+  for (const u of voiceUsers) {
+    const user = userMap.get(u.user_id);
+    if (!user) {
+      console.log(`❌ Skipping deleted voice user: ${u.user_id}`);
+      continue;
+    }
+    
+    // Check if user is still in the server using existing cache (no API call needed)
+    const guildMember = guild.members.cache.get(u.user_id);
+    const isInServer = guildMember !== null;
+    
+    // Only include users who are currently in the server
+    if (isInServer) {
+      voiceUserInfos.push({ 
+        ...u, 
+        username: user.username, 
+        avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
+        isInServer: true
+      });
+      console.log(`✅ Voice user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
+    } else {
+      console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
+    }
+  }
+  
+  return voiceUserInfos;
+}
 
 async function createLeaderboardCard(textUsers, voiceUsers, page) {
   console.log(`🎨 createLeaderboardCard called with:`);
