@@ -92,16 +92,18 @@ export const execute = async (interaction) => {
         const guildMember = await interaction.guild.members.fetch(u.user_id).catch(() => null);
         const isInServer = guildMember !== null;
         
-        // Use "Former Member" for users who left, but keep their XP
-        const displayName = isInServer ? user.username : "Former Member";
-        
-        textUserInfos.push({ 
-          ...u, 
-          username: displayName, 
-          avatarURL: isInServer ? user.displayAvatarURL({ extension: 'png', size: 128 }) : null,
-          isInServer: isInServer
-        });
-        console.log(`✅ Text user: ${displayName} (${u.user_id}) - In server: ${isInServer}`);
+        // Only include users who are currently in the server
+        if (isInServer) {
+          textUserInfos.push({ 
+            ...u, 
+            username: user.username, 
+            avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
+            isInServer: true
+          });
+          console.log(`✅ Text user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
+        } else {
+          console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
+        }
       } catch (error) {
         // Skip deleted users - they won't appear in the leaderboard
         console.log(`❌ Skipping deleted text user: ${u.user_id}`);
@@ -118,16 +120,18 @@ export const execute = async (interaction) => {
         const guildMember = await interaction.guild.members.fetch(u.user_id).catch(() => null);
         const isInServer = guildMember !== null;
         
-        // Use "Former Member" for users who left, but keep their XP
-        const displayName = isInServer ? user.username : "Former Member";
-        
-        voiceUserInfos.push({ 
-          ...u, 
-          username: displayName, 
-          avatarURL: isInServer ? user.displayAvatarURL({ extension: 'png', size: 128 }) : null,
-          isInServer: isInServer
-        });
-        console.log(`✅ Voice user: ${displayName} (${u.user_id}) - In server: ${isInServer}`);
+        // Only include users who are currently in the server
+        if (isInServer) {
+          voiceUserInfos.push({ 
+            ...u, 
+            username: user.username, 
+            avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
+            isInServer: true
+          });
+          console.log(`✅ Voice user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
+        } else {
+          console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
+        }
       } catch (error) {
         // Skip deleted users - they won't appear in the leaderboard
         console.log(`❌ Skipping deleted voice user: ${u.user_id}`);
@@ -304,7 +308,7 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
       }
       // Username
       ctx.font = 'bold 18px Montserrat, Arial';
-      ctx.fillStyle = user.isInServer ? '#fff' : '#888'; // Dimmed color for former members
+      ctx.fillStyle = '#fff'; // All users shown are active members
       ctx.textAlign = 'left';
       ctx.fillText(user.username, col1X + 68, y + 28);
       // XP
@@ -341,7 +345,7 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
         }
       }
       ctx.font = 'bold 18px Montserrat, Arial';
-      ctx.fillStyle = vuser.isInServer ? '#fff' : '#888'; // Dimmed color for former members
+      ctx.fillStyle = '#fff'; // All users shown are active members
       ctx.textAlign = 'left';
       ctx.fillText(vuser.username, col2X + 68, y + 28);
       ctx.font = 'bold 18px Montserrat, Arial';
