@@ -41,9 +41,18 @@ export const execute = async (interaction) => {
   for (const u of users) {
     try {
       const userObj = await interaction.client.users.fetch(u.user_id);
-      userInfos.push({ ...u, username: userObj.username });
-    } catch {
+      
+      // Check if user is still in the server
+      const guildMember = await interaction.guild.members.fetch(u.user_id).catch(() => null);
+      const isInServer = guildMember !== null;
+      
+      // Use "Former Member" for users who left, but keep their XP
+      const displayName = isInServer ? userObj.username : "Former Member";
+      
+      userInfos.push({ ...u, username: displayName, isInServer: isInServer });
+    } catch (error) {
       // Skip deleted users - they won't appear in the leaderboard
+      console.log(`❌ Skipping deleted user: ${u.user_id}`);
       continue;
     }
   }
@@ -59,7 +68,8 @@ export const execute = async (interaction) => {
   let leaderboard = '';
   for (let i = 0; i < pagedUsers.length; i++) {
     const user = pagedUsers[i];
-    leaderboard += `**#${offset + i + 1}**  ${user.username} — ${user.xp + user.voice_xp} XP\n`;
+    const displayName = user.isInServer ? user.username : `*${user.username}*`;
+    leaderboard += `**#${offset + i + 1}**  ${displayName} — ${user.xp + user.voice_xp} XP\n`;
   }
   if (!leaderboard) leaderboard = 'No users found.';
 

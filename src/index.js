@@ -15,6 +15,7 @@ import { setPresence } from './features/presence/presenceManager.js';
 import { channelsConfig, getEnvironment, rolesConfig } from './config/configLoader.js';
 import { logTagSync } from './utils/botLogger.js';
 import { syncUserTagRole } from './features/tagSync/tagSyncService.js';
+import CleanupService from './features/system/cleanupService.js';
 
 // Load environment variables
 dotenv.config();
@@ -124,13 +125,17 @@ client.once('ready', async () => {
     } catch (error) {
       console.error('❌ Error fetching members:', error);
     }
+    
     // Schedule the stats update with proper guild ID
     console.log('🔍 Calling scheduleStatsUpdate');
     scheduleStatsUpdate(client, guild.id, channelsConfig().statsChannelId);
+    
     // Schedule the staff embed update
     scheduleStaffEmbedUpdate(client, guild.id, channelsConfig().staffChannelId);
+    
     // Auto-update the rules embed
     await updateRulesEmbed(client, guild.id);
+    
     // Schedule rules embed updates every 5 minutes
     setInterval(async () => {
       try {
@@ -139,13 +144,21 @@ client.once('ready', async () => {
         console.error('Error updating rules embed:', error);
       }
     }, 5 * 60 * 1000);
+    
     // Schedule the periodic tag role sync
     console.log('🔍 Calling scheduleTagRoleSync');
     scheduleTagRoleSync(client, guild.id);
+    
     // Schedule the periodic level role sync
     console.log('🔍 Calling scheduleLevelRoleSync');
     scheduleLevelRoleSync(client, guild.id);
     console.log('📊 Stats, staff embed, tag sync, and level role sync systems initialized');
+    
+    // Start the cleanup service
+    console.log('🧹 Starting cleanup service');
+    const cleanupService = new CleanupService(client);
+    cleanupService.start();
+    console.log('✅ Cleanup service initialized');
     
     // Schedule birthday checks every hour
     console.log('🎂 Starting birthday check scheduler');
@@ -162,6 +175,7 @@ client.once('ready', async () => {
   } else {
     console.error('❌ Could not find guild with ID:', GUILD_ID);
   }
+  
   // Register commands dynamically based on roles
   await registerCommands(client);
 });
