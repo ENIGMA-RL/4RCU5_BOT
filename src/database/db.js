@@ -190,6 +190,7 @@ export function getTopUsers(limit = 10) {
   const stmt = db.prepare(`
     SELECT user_id, xp, voice_xp, level, (xp + voice_xp) as total_xp
     FROM users 
+    WHERE left_server = 0 OR left_server IS NULL
     ORDER BY total_xp DESC 
     LIMIT ?
   `);
@@ -203,8 +204,9 @@ export function getUserRank(userId) {
     WHERE (xp + voice_xp) > (
       SELECT (xp + voice_xp) 
       FROM users 
-      WHERE user_id = ?
+      WHERE user_id = ? AND (left_server = 0 OR left_server IS NULL)
     )
+    AND (left_server = 0 OR left_server IS NULL)
   `);
   const result = stmt.get(userId);
   return result ? result.rank : null;
@@ -212,12 +214,12 @@ export function getUserRank(userId) {
 
 // Utility Functions
 export function getTotalUsers() {
-  const stmt = db.prepare('SELECT COUNT(*) as count FROM users');
+  const stmt = db.prepare('SELECT COUNT(*) as count FROM users WHERE left_server = 0 OR left_server IS NULL');
   return stmt.get().count;
 }
 
 export function getTotalXP() {
-  const stmt = db.prepare('SELECT SUM(xp + voice_xp) as total FROM users');
+  const stmt = db.prepare('SELECT SUM(xp + voice_xp) as total FROM users WHERE left_server = 0 OR left_server IS NULL');
   return stmt.get().total || 0;
 }
 
@@ -307,6 +309,28 @@ export async function cleanupDeletedUsers(client) {
 export function getUsersWhoLeftServer() {
   const stmt = db.prepare('SELECT user_id, username, xp, voice_xp FROM users WHERE left_server = 1');
   return stmt.all();
+}
+
+// Mark user as left server
+export function markUserLeftServer(userId) {
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET left_server = 1, 
+        updated_at = strftime('%s', 'now')
+    WHERE user_id = ?
+  `);
+  return stmt.run(userId);
+}
+
+// Mark user as active (rejoined server)
+export function markUserActive(userId) {
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET left_server = 0, 
+        updated_at = strftime('%s', 'now')
+    WHERE user_id = ?
+  `);
+  return stmt.run(userId);
 }
 
 export default db; 
