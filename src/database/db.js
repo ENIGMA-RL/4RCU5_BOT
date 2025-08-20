@@ -333,4 +333,14 @@ export function markUserActive(userId) {
   return stmt.run(userId);
 }
 
+// Mark all users as left server (for reset purposes)
+export function markAllUsersAsLeft() {
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET left_server = 1, 
+        updated_at = strftime('%s', 'now')
+  `);
+  return stmt.run();
+}
+
 export default db; 
