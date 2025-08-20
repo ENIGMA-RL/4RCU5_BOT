@@ -96,8 +96,8 @@ export const execute = async (interaction) => {
 
     // Get all users for both text and voice
     const allUsers = await getTopUsersByType('total', 1000); // Get all users once
-    const textUsers = allUsers.sort((a, b) => b.xp - a.xp);
-    const voiceUsers = allUsers.sort((a, b) => b.voice_xp - a.voice_xp);
+    const textUsers = [...allUsers].sort((a, b) => b.xp - a.xp);
+    const voiceUsers = [...allUsers].sort((a, b) => b.voice_xp - a.voice_xp);
 
     // Extract all user IDs for batch fetching
     const allUserIds = [...new Set([...textUsers.map(u => u.user_id), ...voiceUsers.map(u => u.user_id)])];
@@ -207,9 +207,20 @@ async function processTextUsers(textUsers, userMap, guild) {
       continue;
     }
     
-    // Check if user is still in the server using existing cache (no API call needed)
-    const guildMember = guild.members.cache.get(u.user_id);
-    const isInServer = guildMember !== null;
+    // Check if user is still in the server - force fresh check for accuracy
+    let guildMember = guild.members.cache.get(u.user_id);
+    let isInServer = guildMember !== null;
+    
+    // If not in cache, try to fetch fresh data
+    if (!isInServer) {
+      try {
+        guildMember = await guild.members.fetch(u.user_id);
+        isInServer = true;
+      } catch (error) {
+        // User not found or not in server
+        isInServer = false;
+      }
+    }
     
     // Only include users who are currently in the server
     if (isInServer) {
@@ -239,9 +250,20 @@ async function processVoiceUsers(voiceUsers, userMap, guild) {
       continue;
     }
     
-    // Check if user is still in the server using existing cache (no API call needed)
-    const guildMember = guild.members.cache.get(u.user_id);
-    const isInServer = guildMember !== null;
+    // Check if user is still in the server - force fresh check for accuracy
+    let guildMember = guild.members.cache.get(u.user_id);
+    let isInServer = guildMember !== null;
+    
+    // If not in cache, try to fetch fresh data
+    if (!isInServer) {
+      try {
+        guildMember = await guild.members.fetch(u.user_id);
+        isInServer = true;
+      } catch (error) {
+        // User not found or not in server
+        isInServer = false;
+      }
+    }
     
     // Only include users who are currently in the server
     if (isInServer) {
