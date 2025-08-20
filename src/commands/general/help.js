@@ -116,7 +116,7 @@ export const execute = async (interaction) => {
         { name: '/sync-level-roles', description: 'Sync level roles for all members (CNS Developer only)' },
         { name: '/dev-xp-leaderboard', description: 'Dev-only: View the top 50 members by total XP (paginated, private)' },
         { name: '/recalculate-levels', description: 'Dev-only: Recalculate and update all user levels and totalLevel in the database' },
-        { name: '/set-activity-status', description: 'Dev-only: Set initial activity status for all users in database' }
+        { name: '/set-activity-status', description: 'Dev-only: Check and update user activity status in database' }
       ];
       embed.addFields({
         name: '🛠️ Developer Commands',
