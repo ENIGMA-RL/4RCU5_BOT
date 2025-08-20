@@ -197,6 +197,16 @@ export function getTopUsers(limit = 10) {
   return stmt.all(limit);
 }
 
+// Get all users (for admin purposes)
+export function getAllUsers() {
+  const stmt = db.prepare(`
+    SELECT user_id, xp, voice_xp, level, username, left_server
+    FROM users 
+    ORDER BY user_id
+  `);
+  return stmt.all();
+}
+
 export function getUserRank(userId) {
   const stmt = db.prepare(`
     SELECT COUNT(*) + 1 as rank

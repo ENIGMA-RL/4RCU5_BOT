@@ -4,7 +4,7 @@ import { markUserActive, markUserLeftServer } from '../../database/db.js';
 
 export const data = {
   name: 'set-activity-status',
-  description: 'Dev-only: Set initial activity status for all users in database',
+  description: 'Dev-only: Check and update user activity status in database',
   options: [
     {
       name: 'action',
@@ -12,9 +12,8 @@ export const data = {
       description: 'Action to perform',
       required: true,
       choices: [
-        { name: 'Mark all current members as active', value: 'mark-active' },
-        { name: 'Mark all users as left (reset)', value: 'mark-left' },
-        { name: 'Check current status', value: 'check' }
+        { name: 'Show current status', value: 'status' },
+        { name: 'Refresh activity status', value: 'set' }
       ]
     }
   ],
@@ -37,62 +36,8 @@ export const execute = async (interaction) => {
     
     await interaction.deferReply({ ephemeral: true });
 
-    if (action === 'mark-active') {
-      // Mark all current guild members as active
-      const guild = interaction.guild;
-      const members = guild.members.cache;
-      
-      let activeCount = 0;
-      let errorCount = 0;
-      
-      for (const [userId, member] of members) {
-        try {
-          markUserActive(userId);
-          activeCount++;
-        } catch (error) {
-          console.error(`Error marking user ${userId} as active:`, error);
-          errorCount++;
-        }
-      }
-      
-      const embed = new EmbedBuilder()
-        .setTitle('✅ Activity Status Update Complete')
-        .setDescription(`Successfully marked **${activeCount}** current guild members as active.`)
-        .setColor('#00ff00')
-        .setTimestamp();
-      
-      if (errorCount > 0) {
-        embed.addFields({
-          name: '⚠️ Errors',
-          value: `${errorCount} users had errors during processing.`
-        });
-      }
-      
-      await interaction.editReply({ embeds: [embed] });
-      
-    } else if (action === 'mark-left') {
-      // Mark all users as left (reset)
-      const { markAllUsersAsLeft } = await import('../../database/db.js');
-      
-      if (typeof markAllUsersAsLeft === 'function') {
-        const result = markAllUsersAsLeft();
-        
-        const embed = new EmbedBuilder()
-          .setTitle('🔄 Activity Status Reset Complete')
-          .setDescription(`Successfully marked all users as left server.`)
-          .setColor('#ffaa00')
-          .setTimestamp();
-        
-        await interaction.editReply({ embeds: [embed] });
-      } else {
-        await interaction.editReply({
-          content: '❌ Function not available. You may need to add it to the database module.',
-          ephemeral: true
-        });
-      }
-      
-    } else if (action === 'check') {
-      // Check current status
+    if (action === 'status') {
+      // Show current status
       const { getUsersWhoLeftServer } = await import('../../database/db.js');
       const leftUsers = getUsersWhoLeftServer();
       
@@ -107,6 +52,57 @@ export const execute = async (interaction) => {
         embed.addFields({
           name: 'Users Marked as Left (first 10)',
           value: leftUserList + (leftUsers.length > 10 ? '\n... and more' : '')
+        });
+      }
+      
+      await interaction.editReply({ embeds: [embed] });
+      
+    } else if (action === 'set') {
+      // Refresh activity status by checking each user
+      const guild = interaction.guild;
+      const { getAllUsers, markUserActive, markUserLeftServer } = await import('../../database/db.js');
+      
+      // Get all users from database
+      const allUsers = getAllUsers();
+      
+      let activeCount = 0;
+      let leftCount = 0;
+      let errorCount = 0;
+      
+      for (const user of allUsers) {
+        try {
+          // Check if user is currently in the server
+          const guildMember = guild.members.cache.get(user.user_id);
+          
+          if (guildMember) {
+            // User is in server, mark as active
+            markUserActive(user.user_id);
+            activeCount++;
+          } else {
+            // User is not in server, mark as left
+            markUserLeftServer(user.user_id);
+            leftCount++;
+          }
+        } catch (error) {
+          console.error(`Error processing user ${user.user_id}:`, error);
+          errorCount++;
+        }
+      }
+      
+      const embed = new EmbedBuilder()
+        .setTitle('🔄 Activity Status Refresh Complete')
+        .setDescription(`Successfully updated activity status for all users.`)
+        .setColor('#00ff00')
+        .setTimestamp()
+        .addFields(
+          { name: '✅ Active Users', value: `${activeCount} users marked as active`, inline: true },
+          { name: '🚪 Left Users', value: `${leftCount} users marked as left server`, inline: true }
+        );
+      
+      if (errorCount > 0) {
+        embed.addFields({
+          name: '⚠️ Errors',
+          value: `${errorCount} users had errors during processing.`
         });
       }
       
