@@ -3,6 +3,7 @@ import { logAction } from '../features/logger/logger.js';
 import { updateStats } from '../features/stats/statsUpdater.js';
 import { channelsConfig, rolesConfig } from '../config/configLoader.js';
 import { logMemberJoin, logRoleChange } from '../utils/botLogger.js';
+import { markUserActive } from '../database/db.js';
 
 export const name = 'guildMemberAdd';
 export const once = false;
@@ -10,6 +11,9 @@ export const once = false;
 export const execute = async (member) => {
   try {
     console.log(`👋 New member joined: ${member.user.tag} (${member.id})`);
+    
+    // Mark user as active in database (rejoined server)
+    markUserActive(member.id);
     
     // Log the action
     logAction(`New member joined: ${member.user.tag}`);

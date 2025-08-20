@@ -141,15 +141,13 @@ export const execute = async (interaction) => {
     // Create a map for fast user lookup (combines cached and new users)
     const userMap = cachedUsers;
     
-    // Process text and voice users in parallel using cached data
-    const [textUserInfos, voiceUserInfos] = await Promise.all([
-      processTextUsers(textUsers, userMap, interaction.guild),
-      processVoiceUsers(voiceUsers, userMap, interaction.guild)
-    ]);
+    // Process text and voice users efficiently
+    const textUserInfos = await processTextUsers(textUsers, userMap);
+    const voiceUserInfos = await processVoiceUsers(voiceUsers, userMap);
     
-    console.log(`📊 After filtering: ${textUserInfos.length} valid text users, ${voiceUserInfos.length} valid voice users`);
+    console.log(`📊 After processing: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
 
-    // Slice for pagination (after filtering deleted users)
+    // Slice for pagination
     const pagedTextUsers = textUserInfos.slice(offset, offset + pageSize);
     const pagedVoiceUsers = voiceUserInfos.slice(offset, offset + pageSize);
 
@@ -197,7 +195,7 @@ export const execute = async (interaction) => {
 };
 
 // Helper function to process text users efficiently
-async function processTextUsers(textUsers, userMap, guild) {
+async function processTextUsers(textUsers, userMap) {
   const textUserInfos = [];
   
   for (const u of textUsers) {
@@ -207,40 +205,20 @@ async function processTextUsers(textUsers, userMap, guild) {
       continue;
     }
     
-    // Check if user is still in the server - force fresh check for accuracy
-    let guildMember = guild.members.cache.get(u.user_id);
-    let isInServer = guildMember !== null;
-    
-    // If not in cache, try to fetch fresh data
-    if (!isInServer) {
-      try {
-        guildMember = await guild.members.fetch(u.user_id);
-        isInServer = true;
-      } catch (error) {
-        // User not found or not in server
-        isInServer = false;
-      }
-    }
-    
-    // Only include users who are currently in the server
-    if (isInServer) {
-      textUserInfos.push({ 
-        ...u, 
-        username: user.username, 
-        avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
-        isInServer: true
-      });
-      console.log(`✅ Text user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
-    } else {
-      console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
-    }
+    // Add user to the list (database already filtered out users who left)
+    textUserInfos.push({ 
+      ...u, 
+      username: user.username, 
+      avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 })
+    });
+    console.log(`✅ Text user: ${user.username} (${u.user_id})`);
   }
   
   return textUserInfos;
 }
 
 // Helper function to process voice users efficiently
-async function processVoiceUsers(voiceUsers, userMap, guild) {
+async function processVoiceUsers(voiceUsers, userMap) {
   const voiceUserInfos = [];
   
   for (const u of voiceUsers) {
@@ -250,33 +228,13 @@ async function processVoiceUsers(voiceUsers, userMap, guild) {
       continue;
     }
     
-    // Check if user is still in the server - force fresh check for accuracy
-    let guildMember = guild.members.cache.get(u.user_id);
-    let isInServer = guildMember !== null;
-    
-    // If not in cache, try to fetch fresh data
-    if (!isInServer) {
-      try {
-        guildMember = await guild.members.fetch(u.user_id);
-        isInServer = true;
-      } catch (error) {
-        // User not found or not in server
-        isInServer = false;
-      }
-    }
-    
-    // Only include users who are currently in the server
-    if (isInServer) {
-      voiceUserInfos.push({ 
-        ...u, 
-        username: user.username, 
-        avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 }),
-        isInServer: true
-      });
-      console.log(`✅ Voice user: ${user.username} (${u.user_id}) - In server: ${isInServer}`);
-    } else {
-      console.log(`🚪 Skipping user who left server: ${user.username} (${u.user_id})`);
-    }
+    // Add user to the list (database already filtered out users who left)
+    voiceUserInfos.push({ 
+      ...u, 
+      username: user.username, 
+      avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 })
+    });
+    console.log(`✅ Voice user: ${user.username} (${u.user_id})`);
   }
   
   return voiceUserInfos;
