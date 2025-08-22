@@ -126,6 +126,20 @@ client.once('ready', async () => {
       console.error('❌ Error fetching members:', error);
     }
     
+    // Sync existing CNS tag holders on startup
+    console.log('🔄 Starting startup sync for existing CNS tag holders...');
+    try {
+      const { syncExistingTagHoldersOnStartup } = await import('./features/tagSync/tagSyncService.js');
+      const startupSyncResult = await syncExistingTagHoldersOnStartup(guild, client);
+      if (startupSyncResult.success) {
+        console.log(`✅ Startup tag sync: ${startupSyncResult.message}`);
+      } else {
+        console.log(`⚠️ Startup tag sync failed: ${startupSyncResult.error}`);
+      }
+    } catch (error) {
+      console.error('❌ Error during startup tag sync:', error);
+    }
+    
     // Schedule the stats update with proper guild ID
     console.log('🔍 Calling scheduleStatsUpdate');
     scheduleStatsUpdate(client, guild.id, channelsConfig().statsChannelId);

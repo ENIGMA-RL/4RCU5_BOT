@@ -84,6 +84,18 @@ function initializeDatabase() {
     // Column already exists, ignore error
   }
 
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN cns_tag_equipped_at INTEGER');
+  } catch (error) {
+    // Column already exists, ignore error
+  }
+
+  try {
+    db.exec('ALTER TABLE users ADD COLUMN cns_tag_unequipped_at INTEGER');
+  } catch (error) {
+    // Column already exists, ignore error
+  }
+
   // Update existing users
   db.exec(`
     UPDATE users 
@@ -351,6 +363,126 @@ export function markAllUsersAsLeft() {
         updated_at = strftime('%s', 'now')
   `);
   return stmt.run();
+}
+
+// CNS Tag Equipment Tracking Functions
+export function setCnsTagEquipped(userId) {
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET cns_tag_equipped_at = strftime('%s', 'now'),
+        cns_tag_unequipped_at = NULL,
+        updated_at = strftime('%s', 'now')
+    WHERE user_id = ?
+  `);
+  return stmt.run(userId);
+}
+
+export function setCnsTagUnequipped(userId) {
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET cns_tag_unequipped_at = strftime('%s', 'now'),
+        cns_tag_equipped_at = NULL,
+        updated_at = strftime('%s', 'now')
+    WHERE user_id = ?
+  `);
+  return stmt.run(userId);
+}
+
+export function getCnsTagEquippedTime(userId) {
+  const stmt = db.prepare('SELECT cns_tag_equipped_at FROM users WHERE user_id = ?');
+  const result = stmt.get(userId);
+  return result ? result.cns_tag_equipped_at : null;
+}
+
+export function getCnsTagUnequippedTime(userId) {
+  const stmt = db.prepare('SELECT cns_tag_unequipped_at FROM users WHERE user_id = ?');
+  const result = stmt.get(userId);
+  return result ? result.cns_tag_unequipped_at : null;
+}
+
+export function isCnsTagCurrentlyEquipped(userId) {
+  const stmt = db.prepare(`
+    SELECT cns_tag_equipped_at, cns_tag_unequipped_at 
+    FROM users 
+    WHERE user_id = ?
+  `);
+  const result = stmt.get(userId);
+  
+  if (!result) return false;
+  
+  // Tag is currently equipped if they have an equipped timestamp
+  // (unequipped timestamp will be NULL when equipped)
+  return result.cns_tag_equipped_at !== null;
+}
+
+export function getCnsTagStatus(userId) {
+  const stmt = db.prepare(`
+    SELECT cns_tag_equipped_at, cns_tag_unequipped_at 
+    FROM users 
+    WHERE user_id = ?
+  `);
+  const result = stmt.get(userId);
+  
+  if (!result) {
+    return {
+      hasTag: false,
+      currentlyEquipped: false,
+      firstEquippedAt: null,
+      lastUnequippedAt: null,
+      totalTimeEquipped: 0
+    };
+  }
+  
+  const currentlyEquipped = result.cns_tag_equipped_at !== null;
+  
+  let totalTimeEquipped = 0;
+  if (result.cns_tag_equipped_at && result.cns_tag_unequipped_at) {
+    // Calculate time between equipped and unequipped
+    totalTimeEquipped = result.cns_tag_unequipped_at - result.cns_tag_equipped_at;
+  } else if (result.cns_tag_equipped_at) {
+    // Currently equipped, calculate time from equipped until now
+    const now = Math.floor(Date.now() / 1000);
+    totalTimeEquipped = now - result.cns_tag_equipped_at;
+  }
+  
+  return {
+    hasTag: !!result.cns_tag_equipped_at,
+    currentlyEquipped,
+    firstEquippedAt: result.cns_tag_equipped_at,
+    lastUnequippedAt: result.cns_tag_unequipped_at,
+    totalTimeEquipped
+  };
+}
+
+/**
+ * Sync existing CNS tag holders who don't have timestamps
+ * This is called on bot startup to populate data for existing tag holders
+ * @param {Array} currentTagUserIds - Array of user IDs who currently have the CNS tag enabled
+ * @returns {number} Number of users updated
+ */
+export function syncExistingTagHolders(currentTagUserIds) {
+  if (!currentTagUserIds || currentTagUserIds.length === 0) {
+    return 0;
+  }
+
+  try {
+    // Find users who have the tag role but no equipped timestamp
+    const placeholders = currentTagUserIds.map(() => '?').join(',');
+    const stmt = db.prepare(`
+      UPDATE users 
+      SET cns_tag_equipped_at = strftime('%s', 'now'),
+          cns_tag_unequipped_at = NULL,
+          updated_at = strftime('%s', 'now')
+      WHERE user_id IN (${placeholders})
+      AND cns_tag_equipped_at IS NULL
+    `);
+    
+    const result = stmt.run(...currentTagUserIds);
+    return result.changes;
+  } catch (error) {
+    console.error('Error syncing existing tag holders:', error);
+    return 0;
+  }
 }
 
 export default db; 
