@@ -32,6 +32,26 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User]
 });
 
+// Add global error handlers to prevent crashes
+client.on('error', (error) => {
+  console.error('Client error:', error);
+});
+
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+  // Don't exit the process, just log the error
+});
+
+process.on('uncaughtException', (error) => {
+  console.error('Uncaught Exception:', error);
+  // Don't exit the process, just log the error
+});
+
+// Add specific error handler for ticket-related operations
+process.on('warning', (warning) => {
+  console.warn('Process warning:', warning.name, warning.message);
+});
+
 // Initialize commands collection
 client.commands = new Collection();
 
@@ -140,6 +160,23 @@ client.once('ready', async () => {
       console.error('❌ Error during startup tag sync:', error);
     }
     
+    // backfill role tenure for existing cns tag holders
+    try {
+      const { giveawayConfig } = await import('./config/configLoader.js');
+      const { recordRoleFirstSeen } = await import('./database/db.js');
+      const tagRoleId = giveawayConfig().tag_eligibility?.cns_tag_role_id;
+      if (tagRoleId) {
+        const membersWithTag = guild.members.cache.filter(m => m.roles.cache.has(tagRoleId));
+        for (const m of membersWithTag.values()) {
+          // idempotent: only sets if missing
+          recordRoleFirstSeen(guild.id, m.id, tagRoleId);
+        }
+        console.log(`✅ seeded role tenure for ${membersWithTag.size} tag holders`);
+      }
+    } catch (e) {
+      console.error('failed to seed role tenure:', e);
+    }
+    
     // Schedule the stats update with proper guild ID
     console.log('🔍 Calling scheduleStatsUpdate');
     scheduleStatsUpdate(client, guild.id, channelsConfig().statsChannelId);
@@ -186,6 +223,17 @@ client.once('ready', async () => {
     
     // Initial birthday check
     await checkBirthdays(client);
+    
+    // Initialize giveaway system
+    console.log('🎁 Initializing giveaway system');
+    try {
+      const { default: GiveawayService } = await import('./features/giveaway/service.js');
+      const giveawayService = new GiveawayService();
+      await giveawayService.restoreOpenGiveawaysOnStartup(client);
+      console.log('✅ Giveaway system initialized');
+    } catch (error) {
+      console.error('❌ Failed to initialize giveaway system:', error);
+    }
   } else {
     console.error('❌ Could not find guild with ID:', GUILD_ID);
   }

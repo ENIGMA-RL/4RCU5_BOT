@@ -19,9 +19,15 @@ export function loadConfig(configName) {
     ? path.join(testConfigDir, `${configName}.json`)
     : path.join(baseConfigDir, `${configName}.json`);
   
+  console.log(`🔧 Loading config: ${configName}`);
+  console.log(`🔧 Environment: ${NODE_ENV}`);
+  console.log(`🔧 Config path: ${configPath}`);
+  
   try {
     const configData = fs.readFileSync(configPath, 'utf8');
-    return JSON.parse(configData);
+    const config = JSON.parse(configData);
+    console.log(`🔧 Config loaded successfully:`, config);
+    return config;
   } catch (error) {
     console.error(`Error loading config ${configName}:`, error);
     throw error;
@@ -54,4 +60,5 @@ export const oauthConfig = () => loadConfig('oauth');
 export const rolesConfig = () => loadConfig('roles');
 export const staffConfig = () => loadConfig('staff');
 export const ticketsConfig = () => loadConfig('tickets');
-export const vcSettingsConfig = () => loadConfig('vcSettings'); 
+export const vcSettingsConfig = () => loadConfig('vcSettings');
+export const giveawayConfig = () => loadConfig('giveaway'); 

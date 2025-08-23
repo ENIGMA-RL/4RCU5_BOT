@@ -24,7 +24,7 @@ export const execute = async (interaction) => {
   if (!interaction.member.roles.cache.has(devRoleId)) {
     await interaction.reply({
       content: '❌ Only users with the CNS Developer role can use this command.',
-      ephemeral: true
+      flags: 64
     });
     return;
   }
@@ -96,5 +96,5 @@ export const execute = async (interaction) => {
     value: leaderboard
   });
 
-  await interaction.reply({ embeds: [embed], ephemeral: true });
+  await interaction.reply({ embeds: [embed], flags: 64 });
 }; 

@@ -12,15 +12,16 @@ export const data = {
 export const execute = async (interaction) => {
   // Admin-only check
   const adminRoleId = rolesConfig().adminRoles[0]; // Use first admin role
-  if (!interaction.member.roles.cache.has(adminRoleId)) {
+  const hasPermission = interaction.member.roles.cache.has(adminRoleId);
+  if (!hasPermission) {
     await interaction.reply({
-      content: '❌ Only administrators can use this command.',
-      ephemeral: true
+      content: '❌ You do not have permission to use this command.',
+      flags: 64
     });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
 
   try {
     console.log(`🔧 Manual cleanup triggered by ${interaction.user.tag}`);

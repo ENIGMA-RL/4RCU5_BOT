@@ -85,22 +85,30 @@ export const execute = async (interaction) => {
       });
     }
 
-    // Admin Commands (only for admins)
+    // Admin Commands
     if (isAdmin) {
-      const adminCommands = [
-        { name: '/role-assign', description: 'Assign a role to another user (format: @username role_name)' },
-        { name: '/role-remove', description: 'Remove a role from another user (format: @username role_name)' },
-        { name: '/say', description: 'Send a message as the bot' },
-        { name: '/refreshstaff', description: 'Refresh the staff embed' },
-        { name: '/refreshstats', description: 'Refresh the server statistics embed' },
-        { name: '/cooldown', description: 'Set cooldown duration for commands' },
-        { name: '/cleanup-database', description: 'Manually trigger database cleanup to remove deleted users' },
-        { name: '/force-cleanup', description: 'Force immediate cleanup of all suspicious and deleted users' }
-      ];
-
       embed.addFields({
-        name: '👑 Admin Commands',
-        value: adminCommands.map(cmd => `**${cmd.name}** - ${cmd.description}`).join('\n'),
+        name: '🛡️ Admin Commands',
+        value: [
+          '`/ban` - Ban a user from the server',
+          '`/kick` - Kick a user from the server',
+          '`/timeout` - Timeout a user',
+          '`/unban` - Unban a user',
+          '`/untimeout` - Remove timeout from a user',
+          '`/purge` - Delete multiple messages',
+          '`/slowmode` - Set channel slowmode',
+          '`/cooldown` - Set command cooldown',
+          '`/setxp` - Set user XP manually',
+          '`/refreshstaff` - Refresh staff embed',
+          '`/refreshstats` - Refresh server stats',
+          '`/cleanup-database` - Clean up old user data',
+          '`/force-cleanup` - Force database cleanup',
+          '`/migrate-message-xp` - Migrate message XP data',
+          '`/tag-sync` - Sync CNS tag roles',
+          '`/set-activity-status` - Set user activity status',
+          '`/giveaway` - Create a new giveaway',
+          '`/giveaway-manage` - Manage giveaways via panel'
+        ].join('\n'),
         inline: false
       });
     }

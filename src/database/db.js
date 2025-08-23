@@ -1,24 +1,43 @@
-import Database from 'better-sqlite3';
+import betterSqlite3 from 'better-sqlite3';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Determine environment and load appropriate config
+let botConfig;
+try {
+  const env = process.env.NODE_ENV || 'development';
+  const configPath = path.join(__dirname, '..', 'config', env === 'development' ? 'test' : '', 'bot.json');
+  const { readFileSync } = await import('fs');
+  botConfig = JSON.parse(readFileSync(configPath, 'utf8'));
+} catch (error) {
+  console.warn('Failed to load bot config, using default database path');
+  botConfig = { database_path: 'bot.db' };
+}
+
 // Initialize database
-const db = new Database(path.join(__dirname, 'bot.db'));
+const dbPath = path.join(__dirname, '..', '..', botConfig.database_path || 'bot.db');
+const db = new betterSqlite3(dbPath);
 
 // Enable foreign keys
 db.pragma('foreign_keys = ON');
 
 // Initialize database tables
 function initializeDatabase() {
-  console.log('🔧 Initializing database...');
-
-  // Users table for XP and leveling
+  // Users table
   db.exec(`
     CREATE TABLE IF NOT EXISTS users (
       user_id TEXT PRIMARY KEY,
+      username TEXT,
+      discriminator TEXT,
+      avatar TEXT,
+      created_at INTEGER DEFAULT (strftime('%s', 'now')),
+      updated_at INTEGER DEFAULT (strftime('%s', 'now')),
+      last_seen INTEGER,
+      message_count INTEGER DEFAULT 0,
+      voice_time INTEGER DEFAULT 0,
       xp INTEGER DEFAULT 0,
       voice_xp INTEGER DEFAULT 0,
       level INTEGER DEFAULT 0,
@@ -27,9 +46,18 @@ function initializeDatabase() {
       last_message_time INTEGER,
       last_voice_time INTEGER,
       level_up_notifications BOOLEAN DEFAULT 0,
-      created_at INTEGER DEFAULT (strftime('%s', 'now')),
-      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+      left_server BOOLEAN DEFAULT 0,
+      cns_tag_equipped_at INTEGER,
+      cns_tag_unequipped_at INTEGER
     )
+  `);
+
+  // Create indexes for better performance
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_users_level ON users(level);
+    CREATE INDEX IF NOT EXISTS idx_users_xp ON users(xp);
+    CREATE INDEX IF NOT EXISTS idx_users_message_count ON users(message_count);
+    CREATE INDEX IF NOT EXISTS idx_users_voice_time ON users(voice_time);
   `);
 
   // Birthdays table for birthday tracking
@@ -46,88 +74,123 @@ function initializeDatabase() {
     )
   `);
 
-  // Add username column to existing birthdays table if it doesn't exist
-  try {
-    db.exec('ALTER TABLE birthdays ADD COLUMN username TEXT');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  // Add missing columns to existing users table if they don't exist
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN voice_level INTEGER DEFAULT 0');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN total_level INTEGER DEFAULT 0');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN username TEXT');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN left_server BOOLEAN DEFAULT 0');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN voice_level INTEGER DEFAULT 0');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN cns_tag_equipped_at INTEGER');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  try {
-    db.exec('ALTER TABLE users ADD COLUMN cns_tag_unequipped_at INTEGER');
-  } catch (error) {
-    // Column already exists, ignore error
-  }
-
-  // Update existing users
+  // CNS tag tracking table
   db.exec(`
-    UPDATE users 
-    SET voice_level = COALESCE(voice_level, 0),
-        total_level = COALESCE(total_level, 0)
-    WHERE voice_level IS NULL OR total_level IS NULL
+    CREATE TABLE IF NOT EXISTS cns_tag_tracking (
+      user_id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL,
+      equipped_at INTEGER,
+      unequipped_at INTEGER,
+      total_time_equipped INTEGER DEFAULT 0,
+      last_updated INTEGER NOT NULL
+    )
+  `);
+
+  // Voice channel tracking
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS voice_channels (
+      channel_id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL,
+      owner_id TEXT,
+      created_at INTEGER NOT NULL,
+      is_locked INTEGER DEFAULT 0,
+      user_limit INTEGER DEFAULT 0,
+      name TEXT
+    )
+  `);
+
+  // Voice channel permissions
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS voice_channel_permissions (
+      channel_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      permission_type TEXT NOT NULL,
+      granted_at INTEGER NOT NULL,
+      PRIMARY KEY (channel_id, user_id, permission_type)
+    )
+  `);
+
+  // New simplified giveaway tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS giveaways (
+      id TEXT PRIMARY KEY,
+      guild_id TEXT NOT NULL,
+      channel_id TEXT NOT NULL,
+      message_id TEXT NOT NULL,
+      description TEXT NOT NULL,
+      image_url TEXT,
+      end_at INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN ('open','closed','drawn_unpublished','published')),
+      pending_winner_user_id TEXT,
+      published_winner_user_id TEXT,
+      created_by TEXT NOT NULL,
+      created_at INTEGER NOT NULL
+    )
+  `);
+
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS giveaway_entries (
+      giveaway_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      tickets INTEGER NOT NULL,
+      joined_at INTEGER NOT NULL,
+      withdrawn_at INTEGER,
+      PRIMARY KEY (giveaway_id, user_id),
+      FOREIGN KEY (giveaway_id) REFERENCES giveaways(id) ON DELETE CASCADE
+    )
+  `);
+
+  // Role tenure to enforce 30 days for the tag
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS role_tenure (
+      guild_id TEXT NOT NULL,
+      user_id TEXT NOT NULL,
+      role_id TEXT NOT NULL,
+      first_seen_at INTEGER NOT NULL,
+      PRIMARY KEY (guild_id, user_id, role_id)
+    )
   `);
 
   // Create indexes for better performance
   db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_users_level ON users(level);
-    CREATE INDEX IF NOT EXISTS idx_users_xp ON users(xp);
+    CREATE INDEX IF NOT EXISTS idx_gv_status ON giveaways(status);
+    CREATE INDEX IF NOT EXISTS idx_gve_gv ON giveaway_entries(giveaway_id);
   `);
 
   console.log('✅ Database initialized successfully');
 }
 
-// Initialize the database when the module is loaded
+// Initialize database on import
 initializeDatabase();
 
-// User XP and Leveling Functions
+// User management functions
+export function createUser(userId, username = null, discriminator = null, avatar = null) {
+  const stmt = db.prepare(`
+    INSERT OR IGNORE INTO users (user_id, username, discriminator, avatar, xp, voice_xp, level, created_at, updated_at)
+    VALUES (?, ?, ?, ?, 0, 0, 0, strftime('%s', 'now'), strftime('%s', 'now'))
+  `);
+  return stmt.run(userId, username, discriminator, avatar);
+}
+
 export function getUser(userId) {
   const stmt = db.prepare('SELECT * FROM users WHERE user_id = ?');
   return stmt.get(userId);
 }
 
-export function createUser(userId) {
-  const stmt = db.prepare(`
-    INSERT OR IGNORE INTO users (user_id, xp, voice_xp, level, created_at, updated_at)
-    VALUES (?, 0, 0, 0, strftime('%s', 'now'), strftime('%s', 'now'))
-  `);
-  return stmt.run(userId);
+export function updateUserLastSeen(userId) {
+  const stmt = db.prepare('UPDATE users SET last_seen = ? WHERE user_id = ?');
+  const now = Math.floor(Date.now() / 1000);
+  return stmt.run(now, userId);
+}
+
+export function updateUserMessageCount(userId, count) {
+  const stmt = db.prepare('UPDATE users SET message_count = ? WHERE user_id = ?');
+  return stmt.run(count, userId);
+}
+
+export function updateUserVoiceTime(userId, time) {
+  const stmt = db.prepare('UPDATE users SET voice_time = ? WHERE user_id = ?');
+  return stmt.run(time, userId);
 }
 
 export function updateUserXP(userId, xpGain, voiceXpGain = 0) {
@@ -153,49 +216,18 @@ export function updateUserLevel(userId, newLevel, voiceLevel = null, totalLevel 
   return stmt.run(newLevel, voiceLevel, totalLevel, userId);
 }
 
-export function calculateLevel(xp, thresholds) {
-  let level = 0;
-  for (let i = 1; i <= 15; i++) {
-    if (xp >= thresholds[i]) {
-      level = i;
-    } else {
-      break;
-    }
-  }
-  return level;
-}
-
-export function getXPForNextLevel(currentXP, thresholds) {
-  let nextLevel = 1;
-  for (let i = 1; i <= 15; i++) {
-    if (currentXP < thresholds[i]) {
-      nextLevel = i;
-      break;
-    }
-  }
-  return thresholds[nextLevel] || thresholds[15];
-}
-
-export function getCurrentLevelXP(currentXP, thresholds) {
-  let currentLevel = 0;
-  for (let i = 1; i <= 15; i++) {
-    if (currentXP >= thresholds[i]) {
-      currentLevel = i;
-    } else {
-      break;
-    }
-  }
-  return currentLevel > 0 ? currentXP - thresholds[currentLevel - 1] : currentXP;
-}
-
-export function toggleLevelUpNotifications(userId) {
+export function updateCnsTagStatus(userId, equippedAt, unequippedAt) {
   const stmt = db.prepare(`
     UPDATE users 
-    SET level_up_notifications = NOT level_up_notifications,
-        updated_at = strftime('%s', 'now')
+    SET cns_tag_equipped_at = ?, cns_tag_unequipped_at = ?
     WHERE user_id = ?
   `);
-  return stmt.run(userId);
+  return stmt.run(equippedAt, unequippedAt, userId);
+}
+
+export function getAllUsers() {
+  const stmt = db.prepare('SELECT * FROM users ORDER BY level DESC, xp DESC');
+  return stmt.all();
 }
 
 export function getTopUsers(limit = 10) {
@@ -209,48 +241,191 @@ export function getTopUsers(limit = 10) {
   return stmt.all(limit);
 }
 
-// Get all users (for admin purposes)
-export function getAllUsers() {
+export function getUsersByLevel(level) {
+  const stmt = db.prepare('SELECT * FROM users WHERE level = ? ORDER BY xp DESC');
+  return stmt.all(level);
+}
+
+// CNS tag tracking functions
+export function createCnsTagTracking(userId, guildId) {
   const stmt = db.prepare(`
-    SELECT user_id, xp, voice_xp, level, username, left_server
-    FROM users 
-    ORDER BY user_id
+    INSERT OR REPLACE INTO cns_tag_tracking (user_id, guild_id, equipped_at, last_updated)
+    VALUES (?, ?, ?, ?)
   `);
+  const now = Math.floor(Date.now() / 1000);
+  return stmt.run(userId, guildId, now, now);
+}
+
+export function updateCnsTagTracking(userId, equippedAt, unequippedAt, totalTime) {
+  const stmt = db.prepare(`
+    UPDATE cns_tag_tracking 
+    SET equipped_at = ?, unequipped_at = ?, total_time_equipped = ?, last_updated = ?
+    WHERE user_id = ?
+  `);
+  const now = Math.floor(Date.now() / 1000);
+  return stmt.run(equippedAt, unequippedAt, totalTime, now, userId);
+}
+
+export function getCnsTagStatus(userId) {
+  const stmt = db.prepare('SELECT * FROM cns_tag_tracking WHERE user_id = ?');
+  return stmt.get(userId);
+}
+
+export function getAllCnsTagUsers() {
+  const stmt = db.prepare('SELECT * FROM cns_tag_tracking WHERE equipped_at IS NOT NULL AND unequipped_at IS NULL');
   return stmt.all();
 }
 
-export function getUserRank(userId) {
+// Voice channel functions
+export function createVoiceChannel(channelId, guildId, ownerId, name) {
   const stmt = db.prepare(`
-    SELECT COUNT(*) + 1 as rank
-    FROM users 
-    WHERE (xp + voice_xp) > (
-      SELECT (xp + voice_xp) 
-      FROM users 
-      WHERE user_id = ? AND (left_server = 0 OR left_server IS NULL)
-    )
-    AND (left_server = 0 OR left_server IS NULL)
+    INSERT OR REPLACE INTO voice_channels (channel_id, guild_id, owner_id, created_at, name)
+    VALUES (?, ?, ?, ?, ?)
   `);
-  const result = stmt.get(userId);
-  return result ? result.rank : null;
+  const now = Math.floor(Date.now() / 1000);
+  return stmt.run(channelId, guildId, ownerId, now, name);
 }
 
-// Utility Functions
-export function getTotalUsers() {
-  const stmt = db.prepare('SELECT COUNT(*) as count FROM users WHERE left_server = 0 OR left_server IS NULL');
-  return stmt.get().count;
+export function getVoiceChannel(channelId) {
+  const stmt = db.prepare('SELECT * FROM voice_channels WHERE channel_id = ?');
+  return stmt.get(channelId);
 }
 
-export function getTotalXP() {
-  const stmt = db.prepare('SELECT SUM(xp + voice_xp) as total FROM users WHERE left_server = 0 OR left_server IS NULL');
-  return stmt.get().total || 0;
+export function updateVoiceChannelOwner(channelId, ownerId) {
+  const stmt = db.prepare('UPDATE voice_channels SET owner_id = ? WHERE channel_id = ?');
+  return stmt.run(ownerId, channelId);
 }
 
-// Close database connection (call this when shutting down)
-export function closeDatabase() {
-  db.close();
+export function updateVoiceChannelLock(channelId, isLocked) {
+  const stmt = db.prepare('UPDATE voice_channels SET is_locked = ? WHERE channel_id = ?');
+  return stmt.run(isLocked ? 1 : 0, channelId);
 }
 
-// Clean up deleted users and mark users who left the server
+export function updateVoiceChannelLimit(channelId, limit) {
+  const stmt = db.prepare('UPDATE voice_channels SET user_limit = ? WHERE channel_id = ?');
+  return stmt.run(limit, channelId);
+}
+
+export function updateVoiceChannelName(channelId, name) {
+  const stmt = db.prepare('UPDATE voice_channels SET name = ? WHERE channel_id = ?');
+  return stmt.run(name, channelId);
+}
+
+export function deleteVoiceChannel(channelId) {
+  const stmt = db.prepare('DELETE FROM voice_channels WHERE channel_id = ?');
+  return stmt.run(channelId);
+}
+
+export function getVoiceChannelsByGuild(guildId) {
+  const stmt = db.prepare('SELECT * FROM voice_channels WHERE guild_id = ?');
+  return stmt.all(guildId);
+}
+
+// Voice channel permission functions
+export function grantVoiceChannelPermission(channelId, userId, permissionType) {
+  const stmt = db.prepare(`
+    INSERT OR REPLACE INTO voice_channel_permissions (channel_id, user_id, permission_type, granted_at)
+    VALUES (?, ?, ?, ?)
+  `);
+  const now = Math.floor(Date.now() / 1000);
+  return stmt.run(channelId, userId, permissionType, now);
+}
+
+export function revokeVoiceChannelPermission(channelId, userId, permissionType) {
+  const stmt = db.prepare(`
+    DELETE FROM voice_channel_permissions 
+    WHERE channel_id = ? AND user_id = ? AND permission_type = ?
+  `);
+  return stmt.run(channelId, userId, permissionType);
+}
+
+export function getVoiceChannelPermissions(channelId) {
+  const stmt = db.prepare('SELECT * FROM voice_channel_permissions WHERE channel_id = ?');
+  return stmt.all(channelId);
+}
+
+export function checkVoiceChannelPermission(channelId, userId, permissionType) {
+  const stmt = db.prepare(`
+    SELECT COUNT(*) as count 
+    FROM voice_channel_permissions 
+    WHERE channel_id = ? AND user_id = ? AND permission_type = ?
+  `);
+  const result = stmt.get(channelId, userId, permissionType);
+  return result && result.count > 0;
+}
+
+// Clean giveaway database functions
+export function createGiveawayRow(id, guildId, channelId, messageId, description, imageUrl, endAt, createdBy) {
+  const stmt = db.prepare(`
+    INSERT INTO giveaways (id, guild_id, channel_id, message_id, description, image_url, end_at, status, created_by, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, 'open', ?, ?)
+  `);
+  return stmt.run(id, guildId, channelId, messageId, description, imageUrl, endAt, createdBy, Date.now());
+}
+
+export function getGiveawayById(id) {
+  return db.prepare(`SELECT * FROM giveaways WHERE id = ?`).get(id);
+}
+
+export function getOpenInChannel(channelId) {
+  return db.prepare(`SELECT * FROM giveaways WHERE channel_id = ? AND status = 'open' ORDER BY created_at DESC LIMIT 1`).get(channelId);
+}
+
+export function getToRestore() {
+  return db.prepare(`SELECT * FROM giveaways WHERE status IN ('open','closed','drawn_unpublished')`).all();
+}
+
+export function updateGiveaway(id, fields) {
+  const sets = [];
+  const vals = [];
+  if ('messageId' in fields) { sets.push('message_id = ?'); vals.push(fields.messageId); }
+  if ('status' in fields) { sets.push('status = ?'); vals.push(fields.status); }
+  if ('pendingWinnerUserId' in fields) { sets.push('pending_winner_user_id = ?'); vals.push(fields.pendingWinnerUserId); }
+  if ('publishedWinnerUserId' in fields) { sets.push('published_winner_user_id = ?'); vals.push(fields.publishedWinnerUserId); }
+  if (!sets.length) return { changes: 0 };
+  vals.push(id);
+  return db.prepare(`UPDATE giveaways SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
+}
+
+export function deleteGiveaway(id) {
+  return db.prepare(`DELETE FROM giveaways WHERE id = ?`).run(id);
+}
+
+export function addEntry(giveawayId, userId, tickets) {
+  return db.prepare(`
+    INSERT INTO giveaway_entries (giveaway_id, user_id, tickets, joined_at, withdrawn_at)
+    VALUES (?, ?, ?, ?, NULL)
+    ON CONFLICT(giveaway_id, user_id) DO UPDATE SET tickets=excluded.tickets, withdrawn_at=NULL, joined_at=excluded.joined_at
+  `).run(giveawayId, userId, tickets, Date.now());
+}
+
+export function withdrawEntry(giveawayId, userId) {
+  return db.prepare(`UPDATE giveaway_entries SET withdrawn_at = ? WHERE giveaway_id = ? AND user_id = ?`)
+    .run(Date.now(), giveawayId, userId);
+}
+
+export function listActiveEntries(giveawayId) {
+  return db.prepare(`SELECT user_id, tickets, withdrawn_at FROM giveaway_entries WHERE giveaway_id = ? AND withdrawn_at IS NULL`).all(giveawayId);
+}
+
+export function countActiveEntries(giveawayId) {
+  return db.prepare(`SELECT COUNT(*) c FROM giveaway_entries WHERE giveaway_id = ? AND withdrawn_at IS NULL`).get(giveawayId).c || 0;
+}
+
+// Role tenure
+export function recordRoleFirstSeen(guildId, userId, roleId) {
+  const existing = db.prepare(`SELECT first_seen_at FROM role_tenure WHERE guild_id=? AND user_id=? AND role_id=?`).get(guildId, userId, roleId);
+  if (!existing) {
+    db.prepare(`INSERT INTO role_tenure (guild_id, user_id, role_id, first_seen_at) VALUES (?,?,?,?)`).run(guildId, userId, roleId, Date.now());
+  }
+}
+
+export function getRoleFirstSeen(guildId, userId, roleId) {
+  const row = db.prepare(`SELECT first_seen_at FROM role_tenure WHERE guild_id=? AND user_id=? AND role_id=?`).get(guildId, userId, roleId);
+  return row ? row.first_seen_at : null;
+}
+
+// Cleanup and utility functions
 export async function cleanupDeletedUsers(client) {
   console.log('🧹 Starting database cleanup...');
   
@@ -327,13 +502,11 @@ export async function cleanupDeletedUsers(client) {
   }
 }
 
-// Get users who left the server (for display purposes)
 export function getUsersWhoLeftServer() {
   const stmt = db.prepare('SELECT user_id, username, xp, voice_xp FROM users WHERE left_server = 1');
   return stmt.all();
 }
 
-// Mark user as left server
 export function markUserLeftServer(userId) {
   const stmt = db.prepare(`
     UPDATE users 
@@ -344,7 +517,6 @@ export function markUserLeftServer(userId) {
   return stmt.run(userId);
 }
 
-// Mark user as active (rejoined server)
 export function markUserActive(userId) {
   const stmt = db.prepare(`
     UPDATE users 
@@ -355,7 +527,41 @@ export function markUserActive(userId) {
   return stmt.run(userId);
 }
 
-// Mark all users as left server (for reset purposes)
+export function getTotalUsers() {
+  const stmt = db.prepare('SELECT COUNT(*) as count FROM users WHERE left_server = 0 OR left_server IS NULL');
+  return stmt.get().count;
+}
+
+export function getTotalXP() {
+  const stmt = db.prepare('SELECT SUM(xp + voice_xp) as total FROM users WHERE left_server = 0 OR left_server IS NULL');
+  return stmt.get().total || 0;
+}
+
+export function getUserRank(userId) {
+  const stmt = db.prepare(`
+    SELECT COUNT(*) + 1 as rank
+    FROM users 
+    WHERE (xp + voice_xp) > (
+      SELECT (xp + voice_xp) 
+      FROM users 
+      WHERE user_id = ? AND (left_server = 0 OR left_server IS NULL)
+    )
+    AND (left_server = 0 OR left_server IS NULL)
+  `);
+  const result = stmt.get(userId);
+  return result ? result.rank : null;
+}
+
+export function toggleLevelUpNotifications(userId) {
+  const stmt = db.prepare(`
+    UPDATE users 
+    SET level_up_notifications = NOT level_up_notifications,
+        updated_at = strftime('%s', 'now')
+    WHERE user_id = ?
+  `);
+  return stmt.run(userId);
+}
+
 export function markAllUsersAsLeft() {
   const stmt = db.prepare(`
     UPDATE users 
@@ -365,124 +571,71 @@ export function markAllUsersAsLeft() {
   return stmt.run();
 }
 
-// CNS Tag Equipment Tracking Functions
+export function closeDatabase() {
+  db.close();
+}
+
+// Leveling system functions
+export function calculateLevel(xp, thresholds) {
+  if (!thresholds || thresholds.length === 0) return 1;
+  
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (xp >= thresholds[i]) {
+      return i + 1;
+    }
+  }
+  return 1;
+}
+
+export function getXPForNextLevel(currentLevel, thresholds) {
+  if (!thresholds || currentLevel >= thresholds.length) return 0;
+  return thresholds[currentLevel] || 0;
+}
+
+export function getCurrentLevelXP(currentLevel, thresholds) {
+  if (!thresholds || currentLevel <= 1) return 0;
+  return thresholds[currentLevel - 2] || 0;
+}
+
+// CNS tag status functions for other services
+export function isCnsTagCurrentlyEquipped(userId) {
+  const user = getUser(userId);
+  return user && user.cns_tag_equipped_at && !user.cns_tag_unequipped_at;
+}
+
 export function setCnsTagEquipped(userId) {
+  const now = Math.floor(Date.now() / 1000);
   const stmt = db.prepare(`
     UPDATE users 
-    SET cns_tag_equipped_at = strftime('%s', 'now'),
-        cns_tag_unequipped_at = NULL,
-        updated_at = strftime('%s', 'now')
+    SET cns_tag_equipped_at = ?, cns_tag_unequipped_at = NULL
     WHERE user_id = ?
   `);
-  return stmt.run(userId);
+  return stmt.run(now, userId);
 }
 
 export function setCnsTagUnequipped(userId) {
+  const now = Math.floor(Date.now() / 1000);
   const stmt = db.prepare(`
     UPDATE users 
-    SET cns_tag_unequipped_at = strftime('%s', 'now'),
-        cns_tag_equipped_at = NULL,
-        updated_at = strftime('%s', 'now')
+    SET cns_tag_unequipped_at = ?
     WHERE user_id = ?
   `);
-  return stmt.run(userId);
+  return stmt.run(now, userId);
 }
 
-export function getCnsTagEquippedTime(userId) {
-  const stmt = db.prepare('SELECT cns_tag_equipped_at FROM users WHERE user_id = ?');
-  const result = stmt.get(userId);
-  return result ? result.cns_tag_equipped_at : null;
-}
-
-export function getCnsTagUnequippedTime(userId) {
-  const stmt = db.prepare('SELECT cns_tag_unequipped_at FROM users WHERE user_id = ?');
-  const result = stmt.get(userId);
-  return result ? result.cns_tag_unequipped_at : null;
-}
-
-export function isCnsTagCurrentlyEquipped(userId) {
-  const stmt = db.prepare(`
-    SELECT cns_tag_equipped_at, cns_tag_unequipped_at 
-    FROM users 
-    WHERE user_id = ?
-  `);
-  const result = stmt.get(userId);
+export function syncExistingTagHolders(guild, cnsTagRoleId) {
+  const members = guild.members.cache.filter(member => member.roles.cache.has(cnsTagRoleId));
+  let synced = 0;
   
-  if (!result) return false;
-  
-  // Tag is currently equipped if they have an equipped timestamp
-  // (unequipped timestamp will be NULL when equipped)
-  return result.cns_tag_equipped_at !== null;
-}
-
-export function getCnsTagStatus(userId) {
-  const stmt = db.prepare(`
-    SELECT cns_tag_equipped_at, cns_tag_unequipped_at 
-    FROM users 
-    WHERE user_id = ?
-  `);
-  const result = stmt.get(userId);
-  
-  if (!result) {
-    return {
-      hasTag: false,
-      currentlyEquipped: false,
-      firstEquippedAt: null,
-      lastUnequippedAt: null,
-      totalTimeEquipped: 0
-    };
+  for (const [userId, member] of members) {
+    const user = getUser(userId);
+    if (user && !user.cns_tag_equipped_at) {
+      setCnsTagEquipped(userId);
+      synced++;
+    }
   }
   
-  const currentlyEquipped = result.cns_tag_equipped_at !== null;
-  
-  let totalTimeEquipped = 0;
-  if (result.cns_tag_equipped_at && result.cns_tag_unequipped_at) {
-    // Calculate time between equipped and unequipped
-    totalTimeEquipped = result.cns_tag_unequipped_at - result.cns_tag_equipped_at;
-  } else if (result.cns_tag_equipped_at) {
-    // Currently equipped, calculate time from equipped until now
-    const now = Math.floor(Date.now() / 1000);
-    totalTimeEquipped = now - result.cns_tag_equipped_at;
-  }
-  
-  return {
-    hasTag: !!result.cns_tag_equipped_at,
-    currentlyEquipped,
-    firstEquippedAt: result.cns_tag_equipped_at,
-    lastUnequippedAt: result.cns_tag_unequipped_at,
-    totalTimeEquipped
-  };
+  return synced;
 }
 
-/**
- * Sync existing CNS tag holders who don't have timestamps
- * This is called on bot startup to populate data for existing tag holders
- * @param {Array} currentTagUserIds - Array of user IDs who currently have the CNS tag enabled
- * @returns {number} Number of users updated
- */
-export function syncExistingTagHolders(currentTagUserIds) {
-  if (!currentTagUserIds || currentTagUserIds.length === 0) {
-    return 0;
-  }
-
-  try {
-    // Find users who have the tag role but no equipped timestamp
-    const placeholders = currentTagUserIds.map(() => '?').join(',');
-    const stmt = db.prepare(`
-      UPDATE users 
-      SET cns_tag_equipped_at = strftime('%s', 'now'),
-          cns_tag_unequipped_at = NULL,
-          updated_at = strftime('%s', 'now')
-      WHERE user_id IN (${placeholders})
-      AND cns_tag_equipped_at IS NULL
-    `);
-    
-    const result = stmt.run(...currentTagUserIds);
-    return result.changes;
-  } catch (error) {
-    console.error('Error syncing existing tag holders:', error);
-    return 0;
-  }
-}
-
-export default db; 
+export default db;

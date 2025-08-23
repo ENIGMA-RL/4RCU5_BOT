@@ -1,5 +1,6 @@
 import { SlashCommandBuilder } from 'discord.js';
 import { getCnsTagStatus } from '../../database/db.js';
+import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = new SlashCommandBuilder()
   .setName('tagstatus')
@@ -16,40 +17,33 @@ export const cooldown = 5;
 export async function execute(interaction) {
   try {
     const targetUser = interaction.options.getUser('user') || interaction.user;
-    const tagStatus = getCnsTagStatus(targetUser.id);
-    
-    let response = `**CNS Tag Status for ${targetUser.tag}**\n\n`;
-    
-    if (!tagStatus.hasTag) {
-      response += `**Status:** ❌ Never had CNS tag\n`;
-      return interaction.reply({ content: response, ephemeral: true });
+    if (!targetUser) {
+      const response = '❌ Please mention a user to check their tag status.';
+      return interaction.reply({ content: response, flags: 64 });
     }
-    
-    response += `**Status:** ${tagStatus.currentlyEquipped ? '✅ Currently Equipped' : '❌ Currently Unequipped'}\n`;
-    
-    if (tagStatus.currentlyEquipped) {
-      const equippedAt = new Date(tagStatus.firstEquippedAt * 1000);
-      response += `**Equipped Since:** ${equippedAt.toLocaleString()}\n`;
-      
-      if (tagStatus.totalTimeEquipped > 0) {
-        const hours = Math.floor(tagStatus.totalTimeEquipped / 3600);
-        const minutes = Math.floor((tagStatus.totalTimeEquipped % 3600) / 60);
-        response += `**Time Equipped:** ${hours}h ${minutes}m\n`;
-      }
-    } else {
-      if (tagStatus.lastUnequippedAt) {
-        const unequippedAt = new Date(tagStatus.lastUnequippedAt * 1000);
-        response += `**Last Unequipped:** ${unequippedAt.toLocaleString()}\n`;
-      }
+
+    // Check if the target user is a member of the guild
+    const targetMember = interaction.guild.members.cache.get(targetUser.id);
+    if (!targetMember) {
+      const response = '❌ The mentioned user is not a member of this server.';
+      return interaction.reply({ content: response, flags: 64 });
     }
-    
-    return interaction.reply({ content: response, ephemeral: true });
+
+    // Check if the target user has the CNS Official role
+    const cnsOfficialRole = rolesConfig().cnsOfficialRole;
+    const hasTag = targetMember.roles.cache.has(cnsOfficialRole);
+
+    const response = hasTag 
+      ? `✅ **${targetUser.username}** has the CNS server tag equipped.`
+      : `❌ **${targetUser.username}** does not have the CNS server tag equipped.`;
+
+    await interaction.reply({ content: response, flags: 64 });
     
   } catch (error) {
     console.error('Error in tagstatus command:', error);
     return interaction.reply({
       content: '❌ An error occurred while checking tag status.',
-      ephemeral: true
+      flags: 64
     });
   }
 }
