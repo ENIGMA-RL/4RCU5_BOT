@@ -8,6 +8,8 @@ export const name = 'guildMemberUpdate';
 export const once = false;
 
 export async function execute(oldMember, newMember) {
+  console.log(`🔧 [DEBUG] guildMemberUpdate event for user ${newMember.user.tag} (${newMember.id})`);
+  
   // Track role tenure for giveaway eligibility
   const cfg = giveawayConfig();
   const tagId = cfg.tag_eligibility?.cns_tag_role_id;
@@ -23,15 +25,19 @@ export async function execute(oldMember, newMember) {
     // (Remove all console.log statements for clean production output)
     if (oldMember.nickname !== newMember.nickname) {
     }
+    
+    console.log(`🔧 [DEBUG] Scheduling tag sync for user ${newMember.user.tag} in 3 seconds...`);
     setTimeout(async () => {
       try {
+        console.log(`🔧 [DEBUG] Executing tag sync for user ${newMember.user.tag}...`);
         const result = await syncUserTagRole(newMember.id, newMember.guild, newMember.client);
+        console.log(`🔧 [DEBUG] Tag sync result for ${newMember.user.tag}:`, result);
         // Optionally log only if something changed
         if (result && result.success && result.action !== 'no_change') {
-          // console.log(`Tag role sync completed for ${newMember.user.tag}: ${result.action}`);
+          console.log(`✅ Tag role sync completed for ${newMember.user.tag}: ${result.action}`);
         }
       } catch (err) {
-        console.error(`Error syncing tag role for user ${newMember.user.tag}:`, err);
+        console.error(`❌ Error syncing tag role for user ${newMember.user.tag}:`, err);
       }
     }, 3000);
     
