@@ -2,7 +2,7 @@ import fetch from 'node-fetch';
 import { rolesConfig, channelsConfig, isDev } from '../../config/configLoader.js';
 import { EmbedBuilder } from 'discord.js';
 import { logTagSync } from '../../utils/botLogger.js';
-import { setCnsTagEquipped, setCnsTagUnequipped, isCnsTagCurrentlyEquipped, syncExistingTagHolders } from '../../database/db.js';
+import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild, isCnsTagCurrentlyEquipped, syncExistingTagHolders } from '../../database/db.js';
 
 
 /**
@@ -114,7 +114,9 @@ export async function syncUserTagRole(userId, guild, client) {
         await member.roles.add(cnsOfficialRoleId, 'Server tag enabled');
         
         // Track tag equipment in database
-        setCnsTagEquipped(userId);
+        console.log(`🔧 [DEBUG] About to call setCnsTagEquippedWithGuild for user ${userId} in guild ${guild.id}`);
+        setCnsTagEquippedWithGuild(userId, guild.id);
+        console.log(`🔧 [DEBUG] Called setCnsTagEquippedWithGuild for user ${userId}`);
         
         // Log the role assignment
         const role = guild.roles.cache.get(cnsOfficialRoleId);
@@ -142,7 +144,9 @@ export async function syncUserTagRole(userId, guild, client) {
         await member.roles.remove(cnsOfficialRoleId, 'Server tag disabled');
         
         // Track tag unequipment in database
-        setCnsTagUnequipped(userId);
+        console.log(`🔧 [DEBUG] About to call setCnsTagUnequippedWithGuild for user ${userId} in guild ${guild.id}`);
+        setCnsTagUnequippedWithGuild(userId, guild.id);
+        console.log(`🔧 [DEBUG] Called setCnsTagUnequippedWithGuild for user ${userId}`);
         
         // Log the role removal
         const role = guild.roles.cache.get(cnsOfficialRoleId);
@@ -339,12 +343,12 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
       if (hasTag && !hasRole) {
         await member.roles.add(tagRoleId, 'Has CNS tag enabled for tag guild');
         updated++;
-        setCnsTagEquipped(member.id);
+        setCnsTagEquippedWithGuild(member.id, mainGuild.id);
         await logTagSync(client, member.id, member.user.tag, 'Added', 'Bulk sync - Has CNS tag enabled');
       } else if (!hasTag && hasRole) {
         await member.roles.remove(tagRoleId, 'No CNS tag enabled for tag guild');
         removed++;
-        setCnsTagUnequipped(member.id);
+        setCnsTagUnequippedWithGuild(member.id, mainGuild.id);
         await logTagSync(client, member.id, member.user.tag, 'Removed', 'Bulk sync - No CNS tag enabled');
       }
     } catch (error) {
