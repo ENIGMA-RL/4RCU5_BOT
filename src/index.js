@@ -137,7 +137,8 @@ client.once('ready', async () => {
   if (guild) {
     console.log(`Connected to guild: ${guild.name} (${guild.id})`);
     
-    // Fetch all members to ensure we have complete member cache
+    // Fetch roles and members to ensure we have complete caches
+    try { await guild.roles.fetch(); } catch {}
     console.log('🔄 Fetching all guild members...');
     try {
       await guild.members.fetch();
