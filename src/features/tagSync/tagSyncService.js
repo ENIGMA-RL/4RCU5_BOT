@@ -452,6 +452,7 @@ export async function syncExistingTagHoldersOnStartup(guild, client) {
     }
     
     const cnsOfficialRoleId = rolesConfig().cnsOfficialRole;
+    try { await guild.roles.fetch(); } catch {}
     const role = guild.roles.cache.get(cnsOfficialRoleId);
     
     if (!role) {
