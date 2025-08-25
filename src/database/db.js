@@ -700,7 +700,13 @@ export function syncExistingTagHolders(guild, cnsTagRoleId) {
   let synced = 0;
   
   for (const [userId, member] of members) {
-    const user = getUser(userId);
+    let user = getUser(userId);
+    if (!user) {
+      try {
+        createUser(userId, member.user?.username ?? null, null, member.user?.avatar ?? null);
+        user = getUser(userId);
+      } catch {}
+    }
     if (user && !user.cns_tag_equipped_at) {
       setCnsTagEquippedWithGuild(userId, guild.id);
       synced++;
