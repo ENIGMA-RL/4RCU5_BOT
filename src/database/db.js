@@ -58,6 +58,8 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_users_xp ON users(xp);
     CREATE INDEX IF NOT EXISTS idx_users_message_count ON users(message_count);
     CREATE INDEX IF NOT EXISTS idx_users_voice_time ON users(voice_time);
+    CREATE INDEX IF NOT EXISTS idx_users_cns_tag_equipped ON users(cns_tag_equipped_at);
+    CREATE INDEX IF NOT EXISTS idx_users_cns_tag_unequipped ON users(cns_tag_unequipped_at);
   `);
 
   // Birthdays table for birthday tracking
@@ -84,6 +86,13 @@ function initializeDatabase() {
       total_time_equipped INTEGER DEFAULT 0,
       last_updated INTEGER NOT NULL
     )
+  `);
+
+  // Create indexes for cns_tag_tracking table
+  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_cns_tag_tracking_guild ON cns_tag_tracking(guild_id);
+    CREATE INDEX IF NOT EXISTS idx_cns_tag_tracking_equipped ON cns_tag_tracking(equipped_at);
+    CREATE INDEX IF NOT EXISTS idx_cns_tag_tracking_unequipped ON cns_tag_tracking(unequipped_at);
   `);
 
   // Voice channel tracking
@@ -603,24 +612,87 @@ export function isCnsTagCurrentlyEquipped(userId) {
   return user && user.cns_tag_equipped_at && !user.cns_tag_unequipped_at;
 }
 
-export function setCnsTagEquipped(userId) {
+// Enhanced version that accepts guildId for proper tracking
+export function setCnsTagEquippedWithGuild(userId, guildId) {
+  console.log(`🔧 [DEBUG] setCnsTagEquippedWithGuild called for user ${userId} in guild ${guildId}`);
   const now = Math.floor(Date.now() / 1000);
-  const stmt = db.prepare(`
+  
+  // Update users table - only set equipped_at, don't clear unequipped_at
+  const userStmt = db.prepare(`
     UPDATE users 
-    SET cns_tag_equipped_at = ?, cns_tag_unequipped_at = NULL
+    SET cns_tag_equipped_at = ?
     WHERE user_id = ?
   `);
-  return stmt.run(now, userId);
+  const userResult = userStmt.run(now, userId);
+  console.log(`🔧 [DEBUG] Users table update result:`, userResult);
+  
+  // Also update the tracking table
+  try {
+    // Check if tracking record exists
+    const existing = getCnsTagStatus(userId);
+    console.log(`🔧 [DEBUG] Existing tracking record:`, existing);
+    if (existing) {
+      // Update existing record
+      const trackingResult = updateCnsTagTracking(userId, now, existing.unequipped_at, existing.total_time_equipped || 0);
+      console.log(`🔧 [DEBUG] Tracking table update result:`, trackingResult);
+    } else {
+      // Create new tracking record
+      const createResult = createCnsTagTracking(userId, guildId);
+      console.log(`🔧 [DEBUG] Created new tracking record:`, createResult);
+    }
+  } catch (error) {
+    console.error(`❌ Error updating CNS tag tracking for user ${userId}:`, error);
+  }
+  
+  return userResult;
 }
 
-export function setCnsTagUnequipped(userId) {
+// Enhanced version that accepts guildId for proper tracking
+export function setCnsTagUnequippedWithGuild(userId, guildId) {
+  console.log(`🔧 [DEBUG] setCnsTagUnequippedWithGuild called for user ${userId} in guild ${guildId}`);
   const now = Math.floor(Date.now() / 1000);
-  const stmt = db.prepare(`
+  
+  // Update users table
+  const userStmt = db.prepare(`
     UPDATE users 
     SET cns_tag_unequipped_at = ?
     WHERE user_id = ?
   `);
-  return stmt.run(now, userId);
+  const userResult = userStmt.run(now, userId);
+  console.log(`🔧 [DEBUG] Users table update result:`, userResult);
+  
+  // Also update the tracking table
+  try {
+    const existing = getCnsTagStatus(userId);
+    console.log(`🔧 [DEBUG] Existing tracking record:`, existing);
+    if (existing && existing.equipped_at) {
+      // Calculate total time equipped
+      const equippedTime = now - existing.equipped_at;
+      const totalTime = (existing.total_time_equipped || 0) + equippedTime;
+      
+      const trackingResult = updateCnsTagTracking(userId, existing.equipped_at, now, totalTime);
+      console.log(`🔧 [DEBUG] Tracking table update result:`, trackingResult);
+    }
+  } catch (error) {
+    console.error(`❌ Error updating CNS tag tracking for user ${userId}:`, error);
+  }
+  
+  return userResult;
+}
+
+// Backward compatibility functions (these will be deprecated)
+export function setCnsTagEquipped(userId) {
+  // For backward compatibility, try to get guild ID from existing tracking
+  const existing = getCnsTagStatus(userId);
+  const guildId = existing?.guild_id || 'unknown';
+  return setCnsTagEquippedWithGuild(userId, guildId);
+}
+
+export function setCnsTagUnequipped(userId) {
+  // For backward compatibility, try to get guild ID from existing tracking
+  const existing = getCnsTagStatus(userId);
+  const guildId = existing?.guild_id || 'unknown';
+  return setCnsTagUnequippedWithGuild(userId, guildId);
 }
 
 export function syncExistingTagHolders(guild, cnsTagRoleId) {
@@ -630,7 +702,7 @@ export function syncExistingTagHolders(guild, cnsTagRoleId) {
   for (const [userId, member] of members) {
     const user = getUser(userId);
     if (user && !user.cns_tag_equipped_at) {
-      setCnsTagEquipped(userId);
+      setCnsTagEquippedWithGuild(userId, guild.id);
       synced++;
     }
   }
