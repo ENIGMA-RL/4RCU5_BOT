@@ -14,12 +14,12 @@ export const execute = async (interaction) => {
   if (!interaction.member.roles.cache.has(adminRoleId)) {
     await interaction.reply({
       content: '❌ Only administrators can use this command.',
-      ephemeral: true
+      flags: 64
     });
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
 
   try {
     console.log(`🔧 Force cleanup triggered by ${interaction.user.tag}`);

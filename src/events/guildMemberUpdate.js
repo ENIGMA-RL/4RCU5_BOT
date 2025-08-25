@@ -1,11 +1,24 @@
 import { syncUserTagRole } from '../features/tagSync/tagSyncService.js';
 import { refreshStaffEmbed } from '../features/staff/staffEmbed.js';
 import { staffConfig } from '../config/configLoader.js';
+import { giveawayConfig } from '../config/configLoader.js';
+import { recordRoleFirstSeen } from '../database/db.js';
 
 export const name = 'guildMemberUpdate';
 export const once = false;
 
-export const execute = async (oldMember, newMember) => {
+export async function execute(oldMember, newMember) {
+  // Track role tenure for giveaway eligibility
+  const cfg = giveawayConfig();
+  const tagId = cfg.tag_eligibility?.cns_tag_role_id;
+  if (tagId) {
+    const had = oldMember.roles.cache.has(tagId);
+    const has = newMember.roles.cache.has(tagId);
+    if (!had && has) {
+      recordRoleFirstSeen(newMember.guild.id, newMember.id, tagId);
+    }
+  }
+
   try {
     // (Remove all console.log statements for clean production output)
     if (oldMember.nickname !== newMember.nickname) {

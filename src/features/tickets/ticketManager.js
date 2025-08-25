@@ -69,19 +69,28 @@ export class TicketManager {
       // Add staff permissions
       const staffRoles = rolesConfig().adminRoles.concat(rolesConfig().modRoles || []);
       for (const roleId of staffRoles) {
-        const role = await guild.roles.fetch(roleId);
-        if (role) {
-          await ticketChannel.permissionOverwrites.create(role, {
-            ViewChannel: true,
-            SendMessages: true,
-            ReadMessageHistory: true,
-            AttachFiles: true,
-            EmbedLinks: true,
-            UseExternalEmojis: true,
-            AddReactions: true,
-            ManageMessages: true,
-            ManageChannels: true
-          });
+        try {
+          const role = await guild.roles.fetch(roleId);
+          if (role) {
+            await ticketChannel.permissionOverwrites.create(role, {
+              ViewChannel: true,
+              SendMessages: true,
+              ReadMessageHistory: true,
+              AttachFiles: true,
+              EmbedLinks: true,
+              UseExternalEmojis: true,
+              AddReactions: true,
+              ManageMessages: true,
+              ManageChannels: true
+            });
+          }
+        } catch (permissionError) {
+          if (permissionError.code === 10003) {
+            console.log(`Channel was deleted while setting permissions for role ${roleId}`);
+            break; // Stop trying to set permissions if channel is deleted
+          }
+          console.error(`Failed to set permissions for role ${roleId}:`, permissionError);
+          // Continue with other roles even if one fails
         }
       }
 
@@ -113,11 +122,23 @@ export class TicketManager {
       const cnsStaffRole = rolesConfig().staffRole;
       const staffPing = cnsStaffRole ? `<@&${cnsStaffRole}>` : '';
 
-      await ticketChannel.send({
-        content: `${user} Welcome to your support ticket! ${staffPing}`,
-        embeds: [welcomeEmbed],
-        components: [closeButton]
-      });
+      try {
+        await ticketChannel.send({
+          content: `${user} Welcome to your support ticket! ${staffPing}`,
+          embeds: [welcomeEmbed],
+          components: [closeButton]
+        });
+      } catch (sendError) {
+        if (sendError.code === 10003) {
+          console.log('Channel was deleted before welcome message could be sent');
+          // Channel was deleted, but we still created it successfully
+          // The user will see the channel creation success message
+        } else {
+          console.error('Failed to send welcome message:', sendError);
+          // Re-throw non-channel-deletion errors
+          throw sendError;
+        }
+      }
 
       return {
         success: true,
@@ -144,8 +165,22 @@ export class TicketManager {
         return { success: false, error: 'Ticket system is disabled' };
       }
 
+      // Validate inputs
+      if (!interaction || !interaction.guild || !interaction.member) {
+        return { success: false, error: 'Invalid interaction data' };
+      }
+
       const guild = interaction.guild;
-      const channel = await guild.channels.fetch(channelId);
+      let channel;
+      
+      try {
+        channel = await guild.channels.fetch(channelId);
+      } catch (fetchError) {
+        if (fetchError.code === 10003) {
+          return { success: false, error: 'Ticket channel was already deleted or is inaccessible' };
+        }
+        throw fetchError;
+      }
       
       if (!channel) {
         return { success: false, error: 'Ticket channel not found' };
@@ -157,25 +192,46 @@ export class TicketManager {
 
       // Check if user has permission to close tickets
       const member = interaction.member;
-      const hasPermission = member.permissions.has(PermissionFlagsBits.ManageChannels) ||
-        rolesConfig().adminRoles.some(roleId => member.roles.cache.has(roleId)) ||
-        rolesConfig().modRoles?.some(roleId => member.roles.cache.has(roleId));
+      let hasPermission = false;
+      
+      try {
+        hasPermission = member.permissions.has(PermissionFlagsBits.ManageChannels) ||
+          rolesConfig().adminRoles.some(roleId => member.roles.cache.has(roleId)) ||
+          rolesConfig().modRoles?.some(roleId => member.roles.cache.has(roleId));
+      } catch (permissionError) {
+        console.log('Error checking permissions:', permissionError.message);
+        // Default to false if permission check fails
+        hasPermission = false;
+      }
 
       if (!hasPermission) {
         return { success: false, error: 'You do not have permission to close tickets' };
       }
 
       // Archive the ticket (optional - you could save messages to a log channel)
-      const messages = await channel.messages.fetch({ limit: 100 });
-      const ticketLog = messages.map(msg => 
-        `[${msg.createdAt.toISOString()}] ${msg.author.tag}: ${msg.content || '[No content]'}`
-      ).reverse().join('\n');
+      let ticketLog = '';
+      try {
+        const messages = await channel.messages.fetch({ limit: 100 });
+        ticketLog = messages.map(msg => 
+          `[${msg.createdAt.toISOString()}] ${msg.author.tag}: ${msg.content || '[No content]'}`
+        ).reverse().join('\n');
+      } catch (fetchMessagesError) {
+        console.log('Could not fetch ticket messages for archiving:', fetchMessagesError.message);
+        // Continue with ticket closure even if message archiving fails
+      }
 
       // Send archive to a log channel if configured (optional)
       // You could implement this later
 
       // Delete the channel
-      await channel.delete();
+      try {
+        await channel.delete();
+      } catch (deleteError) {
+        if (deleteError.code === 10003) {
+          return { success: false, error: 'Ticket channel was already deleted' };
+        }
+        throw deleteError;
+      }
 
       return {
         success: true,

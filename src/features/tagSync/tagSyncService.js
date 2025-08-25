@@ -2,6 +2,8 @@ import fetch from 'node-fetch';
 import { rolesConfig, channelsConfig, isDev } from '../../config/configLoader.js';
 import { EmbedBuilder } from 'discord.js';
 import { logTagSync } from '../../utils/botLogger.js';
+import { setCnsTagEquipped, setCnsTagUnequipped, isCnsTagCurrentlyEquipped, syncExistingTagHolders } from '../../database/db.js';
+
 
 /**
  * Check if user has server tag enabled using bot token
@@ -111,6 +113,9 @@ export async function syncUserTagRole(userId, guild, client) {
       if (!hasRole) {
         await member.roles.add(cnsOfficialRoleId, 'Server tag enabled');
         
+        // Track tag equipment in database
+        setCnsTagEquipped(userId);
+        
         // Log the role assignment
         const role = guild.roles.cache.get(cnsOfficialRoleId);
         if (role) {
@@ -135,6 +140,9 @@ export async function syncUserTagRole(userId, guild, client) {
       // User has tag disabled - remove role if they have it
       if (hasRole) {
         await member.roles.remove(cnsOfficialRoleId, 'Server tag disabled');
+        
+        // Track tag unequipment in database
+        setCnsTagUnequipped(userId);
         
         // Log the role removal
         const role = guild.roles.cache.get(cnsOfficialRoleId);
@@ -331,10 +339,12 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
       if (hasTag && !hasRole) {
         await member.roles.add(tagRoleId, 'Has CNS tag enabled for tag guild');
         updated++;
+        setCnsTagEquipped(member.id);
         await logTagSync(client, member.id, member.user.tag, 'Added', 'Bulk sync - Has CNS tag enabled');
       } else if (!hasTag && hasRole) {
         await member.roles.remove(tagRoleId, 'No CNS tag enabled for tag guild');
         removed++;
+        setCnsTagUnequipped(member.id);
         await logTagSync(client, member.id, member.user.tag, 'Removed', 'Bulk sync - No CNS tag enabled');
       }
     } catch (error) {
@@ -371,4 +381,79 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
   }
 
   return { count, updated, removed };
+}
+
+/**
+ * Sync existing tag holders on bot startup
+ * This ensures users who already have the CNS tag get timestamps recorded
+ * @param {Guild} guild - The guild to sync
+ * @param {Client} client - The Discord client
+ * @returns {Promise<{success: boolean, synced: number, total: number}>}
+ */
+export async function syncExistingTagHoldersOnStartup(guild, client) {
+  try {
+    console.log('🔄 Starting startup sync for existing CNS tag holders...');
+    
+    // Skip in development mode
+    if (isDev()) {
+      console.log('[TagSync] Skipping startup sync in development mode');
+      return {
+        success: true,
+        synced: 0,
+        total: 0,
+        message: 'Startup sync disabled in development mode'
+      };
+    }
+    
+    const cnsOfficialRoleId = rolesConfig().cnsOfficialRole;
+    const role = guild.roles.cache.get(cnsOfficialRoleId);
+    
+    if (!role) {
+      console.log(`❌ CNS Official role not found: ${cnsOfficialRoleId}`);
+      return {
+        success: false,
+        synced: 0,
+        total: 0,
+        error: 'CNS Official role not found'
+      };
+    }
+    
+    // Get all members with the CNS Official role
+    const membersWithRole = role.members;
+    const totalTagHolders = membersWithRole.size;
+    
+    if (totalTagHolders === 0) {
+      console.log('📋 No users currently have the CNS Official role');
+      return {
+        success: true,
+        synced: 0,
+        total: 0,
+        message: 'No CNS tag holders found'
+      };
+    }
+    
+    // Extract user IDs
+    const userIds = Array.from(membersWithRole.keys());
+    
+    // Sync existing tag holders in database
+    const syncedCount = syncExistingTagHolders(userIds);
+    
+    console.log(`✅ Startup sync complete: ${syncedCount}/${totalTagHolders} users synced`);
+    
+    return {
+      success: true,
+      synced: syncedCount,
+      total: totalTagHolders,
+      message: `Synced ${syncedCount} out of ${totalTagHolders} existing tag holders`
+    };
+    
+  } catch (error) {
+    console.error('❌ Error during startup tag sync:', error);
+    return {
+      success: false,
+      synced: 0,
+      total: 0,
+      error: error.message
+    };
+  }
 } 

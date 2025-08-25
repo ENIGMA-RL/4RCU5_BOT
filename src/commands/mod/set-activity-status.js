@@ -27,14 +27,14 @@ export const execute = async (interaction) => {
     if (!interaction.member.roles.cache.has(devRoleId)) {
       await interaction.reply({
         content: '❌ Only users with the CNS Developer role can use this command.',
-        ephemeral: true
+        flags: 64
       });
       return;
     }
 
     const action = interaction.options.getString('action');
     
-    await interaction.deferReply({ ephemeral: true });
+    await interaction.deferReply({ flags: 64 });
 
     if (action === 'status') {
       // Show current status
@@ -115,12 +115,12 @@ export const execute = async (interaction) => {
       if (interaction.deferred) {
         await interaction.editReply({
           content: '❌ An error occurred while setting activity status.',
-          ephemeral: true
+          flags: 64
         });
       } else {
         await interaction.reply({
           content: '❌ An error occurred while setting activity status.',
-          ephemeral: true
+          flags: 64
         });
       }
     } catch (err) {

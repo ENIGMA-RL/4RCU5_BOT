@@ -1,0 +1,15 @@
+{
+  "giveaway_channel_id": "REPLACE_ME",
+  "admin_role_ids": ["REPLACE_ME_ADMIN", "REPLACE_ME_DEV"],
+  "cns_member_role_id": "REPLACE_ME",
+  "tag_eligibility": {
+    "enabled": true,
+    "cns_tag_role_id": "REPLACE_ME",
+    "min_role_age_days": 30
+  },
+  "weights": {
+    "base": 1,
+    "booster_bonus": 1,
+    "max_total": 2
+  }
+}
