@@ -4,6 +4,25 @@ import { EmbedBuilder } from 'discord.js';
 import { logTagSync } from '../../utils/botLogger.js';
 import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild, isCnsTagCurrentlyEquipped, syncExistingTagHolders } from '../../database/db.js';
 
+// Global backoff and simple cache to reduce rate limit hits
+let globalRateLimitedUntil = 0;
+const TAG_STATUS_TTL_MS = Number(process.env.TAG_STATUS_TTL_MS || 6 * 60 * 60 * 1000); // 6h default
+const tagStatusCache = new Map(); // userId -> { at: number, result }
+
+export function isGloballyRateLimited() {
+  return Date.now() < globalRateLimitedUntil;
+}
+
+export function getGlobalRateLimitReset() {
+  return globalRateLimitedUntil;
+}
+
+function setGlobalRateLimitFromHeaders(response) {
+  const retryAfter = Number(response.headers.get('retry-after') || 1);
+  globalRateLimitedUntil = Date.now() + (retryAfter * 1000);
+  return retryAfter;
+}
+
 
 /**
  * Check if user has server tag enabled using bot token
@@ -13,6 +32,14 @@ import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild, isCnsTagCurre
  */
 export async function checkUserTagStatus(userId, client) {
   try {
+    if (isGloballyRateLimited()) {
+      throw new Error('Rate limited: global backoff active');
+    }
+    // Cache short-circuits frequent checks
+    const cached = tagStatusCache.get(userId);
+    if (cached && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
+      return cached.result;
+    }
     // Fetch user data from Discord API using bot token
     const userResponse = await fetch(`https://discord.com/api/users/${userId}`, {
       headers: {
@@ -22,10 +49,9 @@ export async function checkUserTagStatus(userId, client) {
 
     // Handle rate limiting
     if (userResponse.status === 429) {
-      const retryAfter = userResponse.headers.get('retry-after') || 1;
-      console.warn(`Rate limited when checking tag status for user ${userId}. Retrying after ${retryAfter} seconds.`);
-      await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-      throw new Error(`Rate limited: ${userResponse.status}`);
+      const retryAfter = setGlobalRateLimitFromHeaders(userResponse);
+      console.warn(`Rate limited when checking tag status for user ${userId}. Next attempt after ${retryAfter} seconds.`);
+      throw new Error('Rate limited: 429');
     }
 
     // Handle server errors (5xx) with retry logic
@@ -63,12 +89,14 @@ export async function checkUserTagStatus(userId, client) {
       console.log(`[TagSync Debug] User ${userId} hasTag: ${hasTag}`);
     }
 
-    return {
+    const result = {
       userId,
       isUsingTag: hasTag,
       tagData,
       userData
     };
+    tagStatusCache.set(userId, { at: Date.now(), result });
+    return result;
   } catch (error) {
     console.error(`Error checking tag status for user ${userId}:`, error);
     throw error;
@@ -84,6 +112,9 @@ export async function checkUserTagStatus(userId, client) {
  */
 export async function syncUserTagRole(userId, guild, client) {
   try {
+    if (isGloballyRateLimited()) {
+      return { success: false, error: 'rate_limited' };
+    }
     
     // Skip tag sync in development mode
     if (isDev()) {
@@ -199,6 +230,9 @@ export async function syncAllUserTags(guild, client) {
         message: 'Tag sync disabled in development mode'
       };
     }
+    if (isGloballyRateLimited()) {
+      return { success: false, error: 'rate_limited' };
+    }
     
     // Fetch all members in the guild
     const members = await guild.members.fetch();
@@ -289,16 +323,21 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
     console.log(`[TagSync] Skipping tag guild sync in development mode`);
     return { count: 0, updated: 0, removed: 0 };
   }
+  if (isGloballyRateLimited()) {
+    return { count: 0, updated: 0, removed: 0 };
+  }
   
   const tagGuildId = rolesConfig().tagGuildId;
   const tagRoleId = rolesConfig().cnsOfficialRole;
   const statsChannelId = channelsConfig().statsChannelId;
+  const MAX_PER_RUN = Number(process.env.TAG_SYNC_MAX_PER_RUN || 50);
 
   // Fetch all members in the main guild
   const mainGuildMembers = await mainGuild.members.fetch();
   let count = 0;
   let updated = 0;
   let removed = 0;
+  let processed = 0;
 
   for (const member of mainGuildMembers.values()) {
     try {
@@ -310,10 +349,9 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
       });
 
       if (userResponse.status === 429) {
-        const retryAfter = userResponse.headers.get('retry-after') || 1;
-        console.warn(`Rate limited. Retrying after ${retryAfter} seconds.`);
-        await new Promise(resolve => setTimeout(resolve, retryAfter * 1000));
-        continue;
+        const retryAfter = setGlobalRateLimitFromHeaders(userResponse);
+        console.warn(`Rate limited. Next sync attempt after ${retryAfter} seconds.`);
+        return { count, updated, removed };
       }
 
       // Handle server errors (5xx) with retry logic
@@ -356,6 +394,10 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
     }
     // Add short delay between each user to avoid rate limits
     await new Promise(resolve => setTimeout(resolve, 500)); // 0.5 seconds
+    processed++;
+    if (processed >= MAX_PER_RUN) {
+      break;
+    }
   }
 
   // Update the existing stats embed with the new tag count
@@ -436,11 +478,8 @@ export async function syncExistingTagHoldersOnStartup(guild, client) {
       };
     }
     
-    // Extract user IDs
-    const userIds = Array.from(membersWithRole.keys());
-    
-    // Sync existing tag holders in database
-    const syncedCount = syncExistingTagHolders(userIds);
+    // Sync existing tag holders in database using guild context
+    const syncedCount = syncExistingTagHolders(guild, cnsOfficialRoleId);
     
     console.log(`✅ Startup sync complete: ${syncedCount}/${totalTagHolders} users synced`);
     
