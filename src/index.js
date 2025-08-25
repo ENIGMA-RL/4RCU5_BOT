@@ -149,8 +149,11 @@ client.once('ready', async () => {
     // Sync existing CNS tag holders on startup
     console.log('🔄 Starting startup sync for existing CNS tag holders...');
     try {
+      console.log('🔧 [DEBUG] Importing syncExistingTagHoldersOnStartup...');
       const { syncExistingTagHoldersOnStartup } = await import('./features/tagSync/tagSyncService.js');
+      console.log('🔧 [DEBUG] Function imported successfully, calling it...');
       const startupSyncResult = await syncExistingTagHoldersOnStartup(guild, client);
+      console.log('🔧 [DEBUG] Startup sync completed with result:', startupSyncResult);
       if (startupSyncResult.success) {
         console.log(`✅ Startup tag sync: ${startupSyncResult.message}`);
       } else {
@@ -158,6 +161,7 @@ client.once('ready', async () => {
       }
     } catch (error) {
       console.error('❌ Error during startup tag sync:', error);
+      console.error('❌ Error stack:', error.stack);
     }
     
     // backfill role tenure for existing cns tag holders
