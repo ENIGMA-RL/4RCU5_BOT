@@ -42,7 +42,7 @@ const createdChannels = new Map();
 // Store cooldowns to prevent multiple channel creation
 const userCooldowns = new Map();
 // Store per-user voice join timestamps and XP timers
-const voiceSessionMap = new Map(); // userId -> { joinTimestamp, lastAwardedMinute, interval }
+const voiceSessionMap = new Map(); // userId -> { joinTimestamp, lastAwardedMinute, eligibleMs, lastTick, interval }
 
 export const execute = async (oldState, newState) => {
   // Ignore bot voice states
@@ -202,35 +202,58 @@ export const execute = async (oldState, newState) => {
       if (voiceSessionMap.has(userId)) {
         clearInterval(voiceSessionMap.get(userId).interval);
       }
-      // Set up interval to award XP every minute
+      // Set up interval to accrue eligible (not deafened) time and award XP per full minute
       const interval = setInterval(async () => {
         const session = voiceSessionMap.get(userId);
         if (!session) return;
-        const minutes = Math.floor((Date.now() - session.joinTimestamp) / 60000);
-        if (minutes > session.lastAwardedMinute) {
-          // Award XP for each new minute
-          for (let i = session.lastAwardedMinute + 1; i <= minutes; i++) {
-            await handleVoiceXP(newState.member);
+        const nowTick = Date.now();
+        const delta = nowTick - session.lastTick;
+        session.lastTick = nowTick;
+        // Fetch fresh member state to check deafened status
+        let freshMember = null;
+        try { freshMember = await newState.guild.members.fetch(userId); } catch {}
+        const isDeaf = Boolean(freshMember?.voice?.selfDeaf || freshMember?.voice?.serverDeaf);
+        if (!isDeaf) {
+          session.eligibleMs += delta;
+        }
+        const eligibleMinutes = Math.floor(session.eligibleMs / 60000);
+        if (eligibleMinutes > session.lastAwardedMinute) {
+          const toAward = eligibleMinutes - session.lastAwardedMinute;
+          for (let i = 0; i < toAward; i++) {
+            await handleVoiceXP(freshMember || newState.member);
           }
-          session.lastAwardedMinute = minutes;
+          session.lastAwardedMinute = eligibleMinutes;
         }
       }, 15000); // check every 15 seconds
       voiceSessionMap.set(userId, {
         joinTimestamp: now,
         lastAwardedMinute: 0,
+        eligibleMs: 0,
+        lastTick: now,
         interval
       });
     }
     // If user left a voice channel
     if (oldState.channelId && !newState.channelId) {
       console.log(`👋 ${oldState.member.user.tag} left voice channel: ${oldState.channel ? oldState.channel.name : 'Unknown Channel'}`);
-      // Award XP for any remaining full minutes
+      // Finalize eligible time and award any remaining full minutes (skip if deafened at the end)
       const userId = oldState.member.id;
       const session = voiceSessionMap.get(userId);
       if (session) {
-        const minutes = Math.floor((Date.now() - session.joinTimestamp) / 60000);
-        for (let i = session.lastAwardedMinute + 1; i <= minutes; i++) {
-          await handleVoiceXP(oldState.member);
+        const nowTick = Date.now();
+        const delta = nowTick - session.lastTick;
+        session.lastTick = nowTick;
+        const isDeaf = Boolean(oldState.member?.voice?.selfDeaf || oldState.member?.voice?.serverDeaf);
+        if (!isDeaf) {
+          session.eligibleMs += delta;
+        }
+        const eligibleMinutes = Math.floor(session.eligibleMs / 60000);
+        if (eligibleMinutes > session.lastAwardedMinute) {
+          const toAward = eligibleMinutes - session.lastAwardedMinute;
+          for (let i = 0; i < toAward; i++) {
+            await handleVoiceXP(oldState.member);
+          }
+          session.lastAwardedMinute = eligibleMinutes;
         }
         clearInterval(session.interval);
         voiceSessionMap.delete(userId);
@@ -239,13 +262,24 @@ export const execute = async (oldState, newState) => {
     // If user switched channels
     if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
       // Treat as leave + join
-      // Award XP for any remaining full minutes in old channel
+      // Finalize eligible time on old channel
       const userId = oldState.member.id;
       const session = voiceSessionMap.get(userId);
       if (session) {
-        const minutes = Math.floor((Date.now() - session.joinTimestamp) / 60000);
-        for (let i = session.lastAwardedMinute + 1; i <= minutes; i++) {
-          await handleVoiceXP(oldState.member);
+        const nowTick = Date.now();
+        const delta = nowTick - session.lastTick;
+        session.lastTick = nowTick;
+        const isDeaf = Boolean(oldState.member?.voice?.selfDeaf || oldState.member?.voice?.serverDeaf);
+        if (!isDeaf) {
+          session.eligibleMs += delta;
+        }
+        const eligibleMinutes = Math.floor(session.eligibleMs / 60000);
+        if (eligibleMinutes > session.lastAwardedMinute) {
+          const toAward = eligibleMinutes - session.lastAwardedMinute;
+          for (let i = 0; i < toAward; i++) {
+            await handleVoiceXP(oldState.member);
+          }
+          session.lastAwardedMinute = eligibleMinutes;
         }
         clearInterval(session.interval);
         voiceSessionMap.delete(userId);
@@ -253,19 +287,31 @@ export const execute = async (oldState, newState) => {
       // Start new session for new channel
       const now = Date.now();
       const interval = setInterval(async () => {
-        const session = voiceSessionMap.get(userId);
-        if (!session) return;
-        const minutes = Math.floor((Date.now() - session.joinTimestamp) / 60000);
-        if (minutes > session.lastAwardedMinute) {
-          for (let i = session.lastAwardedMinute + 1; i <= minutes; i++) {
-            await handleVoiceXP(newState.member);
+        const sessionNew = voiceSessionMap.get(userId);
+        if (!sessionNew) return;
+        const nowTickNew = Date.now();
+        const deltaNew = nowTickNew - sessionNew.lastTick;
+        sessionNew.lastTick = nowTickNew;
+        let freshMember = null;
+        try { freshMember = await newState.guild.members.fetch(userId); } catch {}
+        const isDeafNew = Boolean(freshMember?.voice?.selfDeaf || freshMember?.voice?.serverDeaf);
+        if (!isDeafNew) {
+          sessionNew.eligibleMs += deltaNew;
+        }
+        const eligibleMinutesNew = Math.floor(sessionNew.eligibleMs / 60000);
+        if (eligibleMinutesNew > sessionNew.lastAwardedMinute) {
+          const toAwardNew = eligibleMinutesNew - sessionNew.lastAwardedMinute;
+          for (let i = 0; i < toAwardNew; i++) {
+            await handleVoiceXP(freshMember || newState.member);
           }
-          session.lastAwardedMinute = minutes;
+          sessionNew.lastAwardedMinute = eligibleMinutesNew;
         }
       }, 15000);
       voiceSessionMap.set(userId, {
         joinTimestamp: now,
         lastAwardedMinute: 0,
+        eligibleMs: 0,
+        lastTick: now,
         interval
       });
     }
