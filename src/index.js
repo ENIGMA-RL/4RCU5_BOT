@@ -15,6 +15,7 @@ import { setPresence } from './features/presence/presenceManager.js';
 import { channelsConfig, getEnvironment, rolesConfig } from './config/configLoader.js';
 import { logTagSync } from './utils/botLogger.js';
 import { syncUserTagRole } from './features/tagSync/tagSyncService.js';
+import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from './database/db.js';
 import CleanupService from './features/system/cleanupService.js';
 
 // Load environment variables
@@ -98,14 +99,25 @@ client.on('raw', async (packet) => {
         return;
       }
 
-      // Use the service function for tag sync
-      const result = await syncUserTagRole(userId, guild, client);
-      
-      if (result.success && result.action !== 'no_change') {
-        // Update stats after role change
-        if (typeof updateStats === 'function' && client.isReady()) {
-          await updateStats(client, guild.id, channelsConfig().statsChannelId);
-        }
+      // Assign/remove CNS Official role immediately based on tag data and write timestamps
+      const roleId = rolesConfig().cnsOfficialRole;
+      let member = guild.members.cache.get(userId);
+      if (!member) {
+        try { member = await guild.members.fetch(userId); } catch { member = null; }
+      }
+      if (!member) return;
+
+      const hasRole = member.roles.cache.has(roleId);
+      if (isUsingTag && !hasRole) {
+        try { await member.roles.add(roleId, 'Server tag enabled'); } catch {}
+        try { setCnsTagEquippedWithGuild(userId, guild.id); } catch {}
+      } else if (!isUsingTag && hasRole) {
+        try { await member.roles.remove(roleId, 'Server tag disabled'); } catch {}
+        try { setCnsTagUnequippedWithGuild(userId, guild.id); } catch {}
+      }
+
+      if (typeof updateStats === 'function' && client.isReady()) {
+        await updateStats(client, guild.id, channelsConfig().statsChannelId);
       }
     }
   } catch (error) {

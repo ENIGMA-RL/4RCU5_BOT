@@ -123,8 +123,8 @@ class GiveawayService {
       .setTitle(title)
       .setDescription(
         gv.status === 'published'
-          ? `\n**<@${gv.published_winner_user_id}>**\n\n${gv.description}`
-          : `@everyone\n\n${gv.description}`
+          ? `\n**<@${gv.published_winner_user_id}>**\n\n${gv.description}\n`
+          : `@everyone\n\n${gv.description}\n`
       )
       .setColor(colors[gv.status] ?? 0x4ECDC4);
 
@@ -140,29 +140,12 @@ class GiveawayService {
     const eligibility = ['• CNS Member+ (lvl 3 and above)', '• Or CNS tag equiped for at least 30 days'].join('\n');
     const oddsNote = 'Server boosters get +1 ticket (2× chance vs non-boosters)';
     
-    // Add fields with consistent spacing
+    // Add compact fields (reduced spacers)
     embed.addFields(
-      // First row: timing and entries (inline)
       { name: 'Signups Close', value: gv.status === 'open' ? `<t:${endSec}:f>` : 'closed', inline: true },
       { name: 'Entries', value: `${entries}`, inline: true },
-      { name: '\u200B', value: '\u200B', inline: true }, // spacer to complete the row
-      
-      // Spacing between sections
-      { name: '\u200B', value: '\u200B', inline: false },
-      
-      // Second row: eligibility (full width)
       { name: 'Eligibility', value: eligibility, inline: false },
-      
-      // Spacing between sections
-      { name: '\u200B', value: '\u200B', inline: false },
-      
-      // Third row: better odds (full width)
       { name: 'Increase your chances', value: oddsNote, inline: false },
-      
-      // Spacing between sections
-      { name: '\u200B', value: '\u200B', inline: false },
-      
-      // Fourth row: winner information (full width)
       { name: 'Winner', value: 
         gv.status === 'published' ? `Congrats: <@${gv.published_winner_user_id}>!` 
         : gv.status === 'drawn_unpublished' ? 'pending approval' 
