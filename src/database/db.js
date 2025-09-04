@@ -64,6 +64,20 @@ function initializeDatabase() {
     )
   `);
 
+  // Lightweight migration: ensure columns exist in legacy databases
+  try {
+    const columns = db.prepare("PRAGMA table_info('users')").all();
+    const names = new Set(columns.map(c => c.name));
+    if (!names.has('message_count')) {
+      db.exec("ALTER TABLE users ADD COLUMN message_count INTEGER DEFAULT 0");
+    }
+    if (!names.has('voice_time')) {
+      db.exec("ALTER TABLE users ADD COLUMN voice_time INTEGER DEFAULT 0");
+    }
+  } catch (e) {
+    console.warn('Warning applying users table migrations:', e.message);
+  }
+
   // Create indexes for better performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_users_level ON users(level);
