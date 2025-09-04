@@ -218,7 +218,30 @@ class GiveawayService {
     const gv = getGiveawayById(giveawayId);
     if (!gv || gv.status !== 'closed') throw new Error('not closed');
     const entries = listActiveEntries(giveawayId);
-    const pendingId = this.pickWeightedWinner(entries);
+
+    // Re-check eligibility at draw time to ensure fairness
+    let eligibleEntries = entries;
+    try {
+      const guild = await client.guilds.fetch(gv.guild_id);
+      const checks = [];
+      for (const e of entries) {
+        checks.push((async () => {
+          try {
+            const member = guild.members.cache.get(e.user_id) || await guild.members.fetch(e.user_id);
+            const ok = await this.isEligible(member);
+            return ok ? e : null;
+          } catch {
+            return null;
+          }
+        })());
+      }
+      const results = await Promise.all(checks);
+      eligibleEntries = results.filter(Boolean);
+    } catch (err) {
+      console.warn('draw(): eligibility re-check skipped due to error:', err?.message || err);
+    }
+
+    const pendingId = this.pickWeightedWinner(eligibleEntries);
     if (!pendingId) throw new Error('no valid entries');
     updateGiveaway(giveawayId, { status: 'drawn_unpublished', pendingWinnerUserId: pendingId });
     await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'drawn_unpublished', pending_winner_user_id: pendingId }, client);
