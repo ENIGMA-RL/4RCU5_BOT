@@ -116,15 +116,10 @@ export async function syncUserTagRole(userId, guild, client) {
       return { success: false, error: 'rate_limited' };
     }
     
-    // Skip tag sync in development mode
-    if (isDev()) {
-      console.log(`[TagSync] Skipping tag sync for user ${userId} in development mode`);
-      return { 
-        success: true, 
-        action: 'skipped', 
-        user: 'Development Mode',
-        reason: 'Tag sync disabled in development'
-      };
+    // Skip tag sync in development mode unless override is enabled
+    if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
+      console.log(`[TagSync] Skipping tag sync for user ${userId} in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)`);
+      return { success: true, action: 'skipped', user: 'Development Mode', reason: 'Tag sync disabled in development' };
     }
     
     // Check user's tag status using bot token
@@ -218,17 +213,10 @@ export async function syncUserTagRole(userId, guild, client) {
  */
 export async function syncAllUserTags(guild, client) {
   try {
-    // Skip tag sync in development mode
-    if (isDev()) {
-      console.log(`[TagSync] Skipping bulk tag sync in development mode`);
-      return {
-        success: true,
-        processed: 0,
-        successCount: 0,
-        errorCount: 0,
-        results: [],
-        message: 'Tag sync disabled in development mode'
-      };
+    // Skip tag sync in development mode unless override is enabled
+    if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
+      console.log(`[TagSync] Skipping bulk tag sync in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)`);
+      return { success: true, processed: 0, successCount: 0, errorCount: 0, results: [], message: 'Tag sync disabled in development mode' };
     }
     if (isGloballyRateLimited()) {
       return { success: false, error: 'rate_limited' };
@@ -318,9 +306,9 @@ export async function syncAllUserTags(guild, client) {
  * @returns {Promise<{count: number, updated: number, removed: number}>}
  */
 export async function syncTagRolesFromGuild(mainGuild, client) {
-  // Skip tag sync in development mode
-  if (isDev()) {
-    console.log(`[TagSync] Skipping tag guild sync in development mode`);
+  // Skip tag sync in development mode unless override is enabled
+  if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
+    console.log(`[TagSync] Skipping tag guild sync in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)`);
     return { count: 0, updated: 0, removed: 0 };
   }
   if (isGloballyRateLimited()) {
@@ -440,15 +428,10 @@ export async function syncExistingTagHoldersOnStartup(guild, client) {
   try {
     console.log('🔄 Starting startup sync for existing CNS tag holders...');
     
-    // Skip in development mode
-    if (isDev()) {
-      console.log('[TagSync] Skipping startup sync in development mode');
-      return {
-        success: true,
-        synced: 0,
-        total: 0,
-        message: 'Startup sync disabled in development mode'
-      };
+    // Skip in development mode unless override is enabled
+    if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
+      console.log('[TagSync] Skipping startup sync in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)');
+      return { success: true, synced: 0, total: 0, message: 'Startup sync disabled in development mode' };
     }
     
     const cnsOfficialRoleId = rolesConfig().cnsOfficialRole;

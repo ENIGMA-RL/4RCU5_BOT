@@ -1,6 +1,7 @@
 import { ApplicationCommandOptionType } from 'discord.js';
 import { logModerationAction } from '../../utils/moderationLogger.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { markUserLeftServer } from '../../database/db.js';
 
 export const data = {
   name: 'kick',
@@ -60,6 +61,8 @@ export const execute = async (interaction) => {
   try {
     // Kick the user
     await member.kick(reason);
+    // Mark inactive in DB
+    try { markUserLeftServer(user.id); } catch {}
     
     // Log the action and send DM
     await logModerationAction(
