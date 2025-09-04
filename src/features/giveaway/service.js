@@ -140,12 +140,15 @@ class GiveawayService {
     const eligibility = ['• CNS Member+ (lvl 3 and above)', '• Or CNS tag equiped for at least 30 days'].join('\n');
     const oddsNote = 'Server boosters get +1 ticket (2× chance vs non-boosters)';
     
-    // Add compact fields (reduced spacers)
+    // Add compact fields with light spacing between sections
     embed.addFields(
       { name: 'Signups Close', value: gv.status === 'open' ? `<t:${endSec}:f>` : 'closed', inline: true },
       { name: 'Entries', value: `${entries}`, inline: true },
+      { name: '\u200B', value: '\u200B', inline: false },
       { name: 'Eligibility', value: eligibility, inline: false },
+      { name: '\u200B', value: '\u200B', inline: false },
       { name: 'Increase your chances', value: oddsNote, inline: false },
+      { name: '\u200B', value: '\u200B', inline: false },
       { name: 'Winner', value: 
         gv.status === 'published' ? `Congrats: <@${gv.published_winner_user_id}>!` 
         : gv.status === 'drawn_unpublished' ? 'pending approval' 
