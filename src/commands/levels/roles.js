@@ -42,13 +42,13 @@ export const execute = async (interaction) => {
     // CNS Member+ permissions
     if (cnsMemberRole) {
       permissionsText += `**${cnsMemberRole}** and above:\n`;
-      permissionsText += '• Create threads\n• Use external emotes\n\n';
+      permissionsText += '• Create threads\n• Use external emotes\n• Participate in giveaways\n\n';
     }
 
     // CNS Official permissions
     if (cnsOfficialRole) {
       permissionsText += `**${cnsOfficialRole}**:\n`;
-      permissionsText += '• Use stickers\n• Change nickname\n• CNS Official Lounge\n• Use external emotes\n\n';
+      permissionsText += '• Use stickers\n• Change nickname\n• CNS Official Lounge\n• Use external emotes\n• Participate in giveaways\n\n';
     }
 
     // CNS Special Member permissions
