@@ -109,10 +109,16 @@ client.on('raw', async (packet) => {
 
       const hasRole = member.roles.cache.has(roleId);
       if (isUsingTag === true && !hasRole) {
-        try { await member.roles.add(roleId, 'Server tag enabled'); } catch {}
+        try {
+          await member.roles.add(roleId, 'Server tag enabled');
+          try { await logTagSync(client, userId, member.user.tag, 'Added', 'Server tag enabled'); } catch {}
+        } catch {}
         try { setCnsTagEquippedWithGuild(userId, guild.id); } catch {}
       } else if (isUsingTag === false && hasRole) {
-        try { await member.roles.remove(roleId, 'Server tag disabled'); } catch {}
+        try {
+          await member.roles.remove(roleId, 'Server tag disabled');
+          try { await logTagSync(client, userId, member.user.tag, 'Removed', 'Server tag disabled'); } catch {}
+        } catch {}
         try { setCnsTagUnequippedWithGuild(userId, guild.id); } catch {}
       }
 

@@ -5,6 +5,7 @@ import { giveawayConfig } from '../config/configLoader.js';
 import { recordRoleFirstSeen } from '../database/db.js';
 import { rolesConfig } from '../config/configLoader.js';
 import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from '../database/db.js';
+import { logTagSync } from '../utils/botLogger.js';
 
 export const name = 'guildMemberUpdate';
 export const once = false;
@@ -33,11 +34,11 @@ export async function execute(oldMember, newMember) {
     const hadCnsRole = oldMember.roles.cache.has(cnsOfficialRoleId);
     const hasCnsRole = newMember.roles.cache.has(cnsOfficialRoleId);
     if (!hadCnsRole && hasCnsRole) {
-      // Tag role added -> record equipped timestamp
       try { setCnsTagEquippedWithGuild(newMember.id, newMember.guild.id); } catch {}
+      try { await logTagSync(newMember.client, newMember.id, newMember.user.tag, 'Added', 'Role added via member update'); } catch {}
     } else if (hadCnsRole && !hasCnsRole) {
-      // Tag role removed -> record unequipped timestamp
       try { setCnsTagUnequippedWithGuild(newMember.id, newMember.guild.id); } catch {}
+      try { await logTagSync(newMember.client, newMember.id, newMember.user.tag, 'Removed', 'Role removed via member update'); } catch {}
     }
 
     // Keep async tag status verification, but lower priority
