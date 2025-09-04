@@ -114,10 +114,10 @@ client.on('raw', async (packet) => {
       } else if (isUsingTag === false && hasRole) {
         try { await member.roles.remove(roleId, 'Server tag disabled'); } catch {}
         try { setCnsTagUnequippedWithGuild(userId, guild.id); } catch {}
-      } else if (isUsingTag === null && hasRole) {
-        // No tag data in event; reconcile via API for this user only
-        try { await syncUserTagRole(userId, guild, client); } catch {}
       }
+
+      // Always reconcile via service to ensure consistency across edge cases
+      try { await syncUserTagRole(userId, guild, client); } catch {}
 
       if (typeof updateStats === 'function' && client.isReady()) {
         await updateStats(client, guild.id, channelsConfig().statsChannelId);
