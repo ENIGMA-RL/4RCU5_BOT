@@ -116,8 +116,10 @@ client.on('raw', async (packet) => {
         try { setCnsTagUnequippedWithGuild(userId, guild.id); } catch {}
       }
 
-      // Always reconcile via service to ensure consistency across edge cases
-      try { await syncUserTagRole(userId, guild, client); } catch {}
+      // Reconcile only if the event lacked tag data but member still has the role
+      if (isUsingTag === null && hasRole) {
+        try { await syncUserTagRole(userId, guild, client); } catch {}
+      }
 
       if (typeof updateStats === 'function' && client.isReady()) {
         await updateStats(client, guild.id, channelsConfig().statsChannelId);
