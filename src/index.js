@@ -87,11 +87,11 @@ client.on('raw', async (packet) => {
       const guildId = packet.d.guild_id;
       const userId = user.id;
 
-      if (!tagData) return;
-
       // Check if the tag is for the configured guild
       const tagGuildId = rolesConfig().tagGuildId;
-      const isUsingTag = tagData.identity_enabled && tagData.identity_guild_id === tagGuildId;
+      const isUsingTag = (tagData == null)
+        ? null
+        : Boolean(tagData.identity_enabled && tagData.identity_guild_id === tagGuildId);
 
       const guild = client.guilds.cache.get(guildId);
       if (!guild) {
@@ -108,12 +108,15 @@ client.on('raw', async (packet) => {
       if (!member) return;
 
       const hasRole = member.roles.cache.has(roleId);
-      if (isUsingTag && !hasRole) {
+      if (isUsingTag === true && !hasRole) {
         try { await member.roles.add(roleId, 'Server tag enabled'); } catch {}
         try { setCnsTagEquippedWithGuild(userId, guild.id); } catch {}
-      } else if (!isUsingTag && hasRole) {
+      } else if (isUsingTag === false && hasRole) {
         try { await member.roles.remove(roleId, 'Server tag disabled'); } catch {}
         try { setCnsTagUnequippedWithGuild(userId, guild.id); } catch {}
+      } else if (isUsingTag === null && hasRole) {
+        // No tag data in event; reconcile via API for this user only
+        try { await syncUserTagRole(userId, guild, client); } catch {}
       }
 
       if (typeof updateStats === 'function' && client.isReady()) {
