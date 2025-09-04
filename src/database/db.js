@@ -17,8 +17,20 @@ try {
   botConfig = { database_path: 'bot.db' };
 }
 
-// Initialize database
-const dbPath = path.join(__dirname, '..', '..', botConfig.database_path || 'bot.db');
+// Initialize database at src/database by default
+function resolveDatabasePath() {
+  const configured = botConfig.database_path;
+  if (!configured) {
+    return path.join(__dirname, 'bot.db');
+  }
+  if (path.isAbsolute(configured)) {
+    return configured;
+  }
+  // For relative or bare filenames, place it under the database folder
+  return path.join(__dirname, configured);
+}
+
+const dbPath = resolveDatabasePath();
 const db = new betterSqlite3(dbPath);
 
 // Enable foreign keys
