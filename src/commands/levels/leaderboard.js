@@ -94,13 +94,17 @@ export const execute = async (interaction) => {
     const pageSize = 10;
     const offset = (page - 1) * pageSize;
 
-    // Get all users for both text and voice
-    const allUsers = await getTopUsersByType('total', 1000); // Get all users once
+    // Get users once and sort for both columns
+    const allUsers = await getTopUsersByType('total', 1000);
     const textUsers = [...allUsers].sort((a, b) => b.xp - a.xp);
     const voiceUsers = [...allUsers].sort((a, b) => b.voice_xp - a.voice_xp);
 
-    // Extract all user IDs for batch fetching
-    const allUserIds = [...new Set([...textUsers.map(u => u.user_id), ...voiceUsers.map(u => u.user_id)])];
+    // Determine only the users needed for the requested page
+    const pagedTextRaw = textUsers.slice(offset, offset + pageSize);
+    const pagedVoiceRaw = voiceUsers.slice(offset, offset + pageSize);
+
+    // Extract only user IDs for current page (deduped)
+    const allUserIds = [...new Set([...pagedTextRaw.map(u => u.user_id), ...pagedVoiceRaw.map(u => u.user_id)])];
     
     console.log(`🔍 Processing ${textUsers.length} text users and ${voiceUsers.length} voice users (${allUserIds.length} unique users)`);
     
@@ -141,22 +145,18 @@ export const execute = async (interaction) => {
     // Create a map for fast user lookup (combines cached and new users)
     const userMap = cachedUsers;
     
-    // Process text and voice users efficiently
-    const textUserInfos = await processTextUsers(textUsers, userMap);
-    const voiceUserInfos = await processVoiceUsers(voiceUsers, userMap);
+    // Process only current page users
+    const textUserInfos = await processTextUsers(pagedTextRaw, userMap);
+    const voiceUserInfos = await processVoiceUsers(pagedVoiceRaw, userMap);
     
     console.log(`📊 After processing: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
 
-    // Slice for pagination
-    const pagedTextUsers = textUserInfos.slice(offset, offset + pageSize);
-    const pagedVoiceUsers = voiceUserInfos.slice(offset, offset + pageSize);
-
-    console.log(`📄 Page ${page}: ${pagedTextUsers.length} text users, ${pagedVoiceUsers.length} voice users`);
-    console.log(`📝 Text users for page:`, pagedTextUsers.map(u => u.username));
-    console.log(`🎤 Voice users for page:`, pagedVoiceUsers.map(u => u.username));
+    console.log(`📄 Page ${page}: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
+    console.log(`📝 Text users for page:`, textUserInfos.map(u => u.username));
+    console.log(`🎤 Voice users for page:`, voiceUserInfos.map(u => u.username));
 
     // Ensure we have enough users for the page
-    if (pagedTextUsers.length === 0 && pagedVoiceUsers.length === 0) {
+    if (textUserInfos.length === 0 && voiceUserInfos.length === 0) {
       await interaction.editReply({
         content: '❌ No users found for this page. The leaderboard may be empty or all users on this page have been deleted.'
       });
@@ -164,7 +164,7 @@ export const execute = async (interaction) => {
     }
 
     // Create leaderboard card image
-    const buffer = await createLeaderboardCard(pagedTextUsers, pagedVoiceUsers, page);
+    const buffer = await createLeaderboardCard(textUserInfos, voiceUserInfos, page);
     await interaction.editReply({
       files: [{ attachment: buffer, name: 'leaderboard.png' }]
     });

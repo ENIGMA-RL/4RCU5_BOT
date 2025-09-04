@@ -3,6 +3,8 @@ import { refreshStaffEmbed } from '../features/staff/staffEmbed.js';
 import { staffConfig } from '../config/configLoader.js';
 import { giveawayConfig } from '../config/configLoader.js';
 import { recordRoleFirstSeen } from '../database/db.js';
+import { rolesConfig } from '../config/configLoader.js';
+import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from '../database/db.js';
 
 export const name = 'guildMemberUpdate';
 export const once = false;
@@ -26,19 +28,23 @@ export async function execute(oldMember, newMember) {
     if (oldMember.nickname !== newMember.nickname) {
     }
     
-    console.log(`🔧 [DEBUG] Scheduling tag sync for user ${newMember.user.tag} in 3 seconds...`);
+    // Immediate write-on-change for CNS Official role to ensure timestamps are recorded in production
+    const cnsOfficialRoleId = rolesConfig().cnsOfficialRole;
+    const hadCnsRole = oldMember.roles.cache.has(cnsOfficialRoleId);
+    const hasCnsRole = newMember.roles.cache.has(cnsOfficialRoleId);
+    if (!hadCnsRole && hasCnsRole) {
+      // Tag role added -> record equipped timestamp
+      try { setCnsTagEquippedWithGuild(newMember.id, newMember.guild.id); } catch {}
+    } else if (hadCnsRole && !hasCnsRole) {
+      // Tag role removed -> record unequipped timestamp
+      try { setCnsTagUnequippedWithGuild(newMember.id, newMember.guild.id); } catch {}
+    }
+
+    // Keep async tag status verification, but lower priority
     setTimeout(async () => {
       try {
-        console.log(`🔧 [DEBUG] Executing tag sync for user ${newMember.user.tag}...`);
-        const result = await syncUserTagRole(newMember.id, newMember.guild, newMember.client);
-        console.log(`🔧 [DEBUG] Tag sync result for ${newMember.user.tag}:`, result);
-        // Optionally log only if something changed
-        if (result && result.success && result.action !== 'no_change') {
-          console.log(`✅ Tag role sync completed for ${newMember.user.tag}: ${result.action}`);
-        }
-      } catch (err) {
-        console.error(`❌ Error syncing tag role for user ${newMember.user.tag}:`, err);
-      }
+        await syncUserTagRole(newMember.id, newMember.guild, newMember.client);
+      } catch {}
     }, 3000);
     
     // Check if any staff roles were added or removed
