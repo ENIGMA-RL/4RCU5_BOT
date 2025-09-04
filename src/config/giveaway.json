@@ -1,11 +1,11 @@
 {
-  "giveaway_channel_id": "REPLACE_ME",
-  "admin_role_ids": ["REPLACE_ME_ADMIN", "REPLACE_ME_DEV"],
-  "cns_member_role_id": "REPLACE_ME",
+  "giveaway_channel_id": "1408636792873423032",
+  "admin_role_ids": ["1390075310090747904", "1026533862316200027", "1390082142842912809"],
+  "cns_member_role_id": "1245022253431914547",
   "tag_eligibility": {
     "enabled": true,
-    "cns_tag_role_id": "REPLACE_ME",
-    "min_role_age_days": 30
+    "cns_tag_role_id": "1389859132198096946",
+    "min_role_age_days": 0
   },
   "weights": {
     "base": 1,
