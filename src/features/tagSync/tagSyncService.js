@@ -10,7 +10,7 @@ import { fetchRoleHolders } from '../../utils/discordHelpers.js';
 
 // Global backoff and simple cache to reduce rate limit hits
 let globalRateLimitedUntil = 0;
-export const TAG_STATUS_TTL_MS = Number(process.env.TAG_STATUS_TTL_MS ?? 1_000); // default 15s
+export const TAG_STATUS_TTL_MS = Number(process.env.TAG_STATUS_TTL_MS ?? 0);
 const tagStatusCache = new Map(); // userId -> { at: number, result }
 
 export function clearTagStatusCache(userId) {
@@ -44,9 +44,10 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
       throw new Error('Rate limited: global backoff active');
     }
     const forceRefresh = !!opts.forceRefresh;
-    if (!forceRefresh) {
+    const noCache = !!opts.noCache;
+    if (!forceRefresh && !noCache) {
       const cached = tagStatusCache.get(userId);
-      if (cached && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
+      if (cached && TAG_STATUS_TTL_MS > 0 && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
         return cached.result;
       }
     }
@@ -72,9 +73,9 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
       }, '[TagSync Debug] User data');
     }
     
-    // Check if user has tag enabled for the configured guild
-    const tagGuildId = rolesConfig().tagGuildId;
-    const hasTag = isUsingTag;
+    // Check if user has tag enabled for our main guild
+    const expectedGuildId = process.env.GUILD_ID || rolesConfig().tagGuildId;
+    const hasTag = Boolean(tagData && tagData.identity_enabled && tagData.identity_guild_id === expectedGuildId);
 
     if (isDev()) {
       logger.trace(`[TagSync Debug] User ${userId} hasTag: ${hasTag}`);
@@ -86,7 +87,7 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
       tagData,
       userData
     };
-    tagStatusCache.set(userId, { at: Date.now(), result: out });
+    if (!noCache) tagStatusCache.set(userId, { at: Date.now(), result: out });
     return out;
   } catch (error) {
     logger.error({ err: error }, `Error checking tag status for user ${userId}`);
