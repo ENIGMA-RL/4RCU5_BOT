@@ -6,24 +6,10 @@ import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'tag-sync',
-  description: 'Manually sync CNS tag roles based on tag guild membership (CNS Developer only)',
+  description: 'Sync CNS Official role with live server tag',
   options: [
-    {
-      name: 'type',
-      description: 'Type of sync to perform',
-      type: 3, // STRING
-      required: false,
-      choices: [
-        {
-          name: 'Full Sync',
-          value: 'full'
-        },
-        {
-          name: 'Bulk Sync',
-          value: 'bulk'
-        }
-      ]
-    }
+    { name: 'user', description: 'Specific user to sync', type: 6, required: false }, // USER
+    { name: 'all', description: 'Scan all members', type: 5, required: false } // BOOLEAN
   ],
   defaultMemberPermissions: null
 };
@@ -50,8 +36,6 @@ export const execute = async (interaction) => {
       return;
     }
     
-    const syncType = interaction.options.getString('type') || 'full';
-
     const guild = interaction.guild;
     const roleId = rolesConfig().cnsOfficialRole;
     const guildId = guild.id;
@@ -74,8 +58,12 @@ export const execute = async (interaction) => {
       return { changed: false };
     };
 
+    const targetUser = interaction.options.getUser('user');
+    const doAll = interaction.options.getBoolean('all') === true;
+    const syncType = doAll ? 'bulk' : 'single';
+
     let processed = 0, added = 0, removed = 0;
-    if (syncType === 'bulk') {
+    if (doAll) {
       const members = await guild.members.fetch();
       for (const [id] of members) {
         try {
@@ -83,11 +71,12 @@ export const execute = async (interaction) => {
           processed++;
           if (r.added) added += r.added;
           if (r.removed) removed += r.removed;
-          await new Promise(res => setTimeout(res, 250));
+          await new Promise(res => setTimeout(res, 200));
         } catch {}
       }
     } else {
-      const r = await reconcile(interaction.user.id);
+      const id = (targetUser?.id) || interaction.user.id;
+      const r = await reconcile(id);
       processed = 1;
       if (r.added) added += r.added;
       if (r.removed) removed += r.removed;
@@ -114,9 +103,9 @@ export const execute = async (interaction) => {
         .setColor('#00ff00')
         .setDescription('Bulk tag role synchronization completed!')
         .addFields(
-          { name: '📊 Processed', value: `${result.processed || 0}`, inline: true },
-          { name: '✅ Success', value: `${result.successCount || 0}`, inline: true },
-          { name: '❌ Errors', value: `${result.errorCount || 0}`, inline: true }
+          { name: 'processed', value: String(result.count), inline: true },
+          { name: 'roles added', value: String(result.updated), inline: true },
+          { name: 'roles removed', value: String(result.removed), inline: true }
         )
         .setTimestamp()
         .setFooter({ text: `Triggered by ${interaction.user.tag}` });
@@ -126,11 +115,11 @@ export const execute = async (interaction) => {
       const embed = new EmbedBuilder()
         .setTitle('🔄 CNS Tag Role Sync Results')
         .setColor('#00ff00')
-        .setDescription('Tag role synchronization with tag guild completed!')
+        .setDescription('Tag role synchronization completed!')
         .addFields(
-          { name: '👥 Members with Tag', value: `${result.count}`, inline: true },
-          { name: '✅ Roles Added', value: `${result.updated}`, inline: true },
-          { name: '❌ Roles Removed', value: `${result.removed}`, inline: true }
+          { name: 'processed', value: String(result.count), inline: true },
+          { name: 'roles added', value: String(result.updated), inline: true },
+          { name: 'roles removed', value: String(result.removed), inline: true }
         )
         .setTimestamp()
         .setFooter({ text: `Triggered by ${interaction.user.tag}` });
