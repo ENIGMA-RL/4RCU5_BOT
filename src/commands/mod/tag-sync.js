@@ -1,6 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
 import { rolesConfig, isDev } from '../../config/configLoader.js';
-import { syncTagRolesFromGuild, syncAllUserTags } from '../../features/tagSync/tagSyncService.js';
+import { fetchUserPrimaryGuild } from '../../lib/discordProfileApi.js';
+import { setCnsTagEquippedWithGuild as recordEquipped, setCnsTagUnequippedWithGuild as recordUnequipped } from '../../repositories/tagRepo.js';
 import logger from '../../utils/logger.js';
 
 export const data = {
@@ -51,11 +52,47 @@ export const execute = async (interaction) => {
     
     const syncType = interaction.options.getString('type') || 'full';
 
-    // Gebruik de service die het Discord user endpoint (primary_guild) raadpleegt
-    // en per member de CNS-rol toevoegt/verwijdert.
-    const result = syncType === 'bulk'
-      ? await syncAllUserTags(interaction.guild, interaction.client)
-      : await syncTagRolesFromGuild(interaction.guild, interaction.client);
+    const guild = interaction.guild;
+    const roleId = rolesConfig().cnsOfficialRole;
+    const guildId = guild.id;
+
+    // reconcile helper
+    const reconcile = async (userId) => {
+      const { identity_enabled, identity_guild_id } = await fetchUserPrimaryGuild(userId, guildId);
+      const hasTag = Boolean(identity_enabled && identity_guild_id === guildId);
+      const member = await guild.members.fetch(userId).catch(() => null);
+      if (!member) return { changed: false };
+      if (hasTag && !member.roles.cache.has(roleId)) {
+        await member.roles.add(roleId, 'manual tag sync');
+        try { recordEquipped(member.id, guildId); } catch {}
+        return { changed: true, added: 1 };
+      } else if (!hasTag && member.roles.cache.has(roleId)) {
+        await member.roles.remove(roleId, 'manual tag sync');
+        try { recordUnequipped(member.id, guildId); } catch {}
+        return { changed: true, removed: 1 };
+      }
+      return { changed: false };
+    };
+
+    let processed = 0, added = 0, removed = 0;
+    if (syncType === 'bulk') {
+      const members = await guild.members.fetch();
+      for (const [id] of members) {
+        try {
+          const r = await reconcile(id);
+          processed++;
+          if (r.added) added += r.added;
+          if (r.removed) removed += r.removed;
+          await new Promise(res => setTimeout(res, 250));
+        } catch {}
+      }
+    } else {
+      const r = await reconcile(interaction.user.id);
+      processed = 1;
+      if (r.added) added += r.added;
+      if (r.removed) removed += r.removed;
+    }
+    const result = { count: processed, updated: added, removed };
 
     if (isDev() && !allowDevWrites) {
       const embed = new EmbedBuilder()
