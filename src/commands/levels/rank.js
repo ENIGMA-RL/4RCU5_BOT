@@ -1,7 +1,7 @@
 // Imports and setup
 import { ApplicationCommandOptionType, AttachmentBuilder } from 'discord.js';
 import { createCanvas, loadImage, registerFont } from 'canvas';
-import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
+import { getUserLevelData, getServerRankActiveGuildAware } from '../../features/leveling/levelingSystem.js';
 import db from '../../database/connection.js';
 import { getServerRankActive } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
@@ -67,8 +67,8 @@ export const execute = async (interaction) => {
       return;
     }
 
-    // Get server rank among active users only
-    const serverRank = getServerRankActive(userId, 'total');
+    // Get server rank among current guild members only
+    const serverRank = await getServerRankActiveGuildAware(userId, 'total', interaction.guild);
     
     // Load level settings
     const levelSettings = levelSettingsConfig();

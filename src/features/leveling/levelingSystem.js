@@ -358,3 +358,27 @@ export function getServerRankActive(userId, type = 'total') {
     .get(row.score).n;
   return 1 + higher;
 }
+
+// Guild-aware rank: excludes users not currently in the guild even if DB flag wasn't set
+export async function getServerRankActiveGuildAware(userId, type = 'total', guild) {
+  const field =
+    type === 'message' ? 'xp' :
+    type === 'voice'   ? 'voice_xp' :
+                         '(xp + voice_xp)';
+
+  const row = db
+    .prepare(`SELECT ${field} AS score, COALESCE(left_server,0) AS active FROM users WHERE user_id = ?`)
+    .get(userId);
+  if (!row) return null;
+  if (row.active !== 0) return null;
+
+  try { await guild.members.fetch(); } catch {}
+  const memberSet = new Set(guild.members.cache.keys());
+
+  const higherRows = db
+    .prepare(`SELECT user_id, ${field} AS score, COALESCE(left_server,0) AS active FROM users WHERE ${field} > ?`)
+    .all(row.score);
+
+  const higher = higherRows.filter(r => r.active === 0 && memberSet.has(r.user_id)).length;
+  return 1 + higher;
+}
