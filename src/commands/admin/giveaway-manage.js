@@ -1,7 +1,7 @@
 import { SlashCommandBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import GiveawayService from '../../features/giveaway/service.js';
 import { giveawayConfig } from '../../config/configLoader.js';
-import db from '../../database/db.js';
+import db from '../../database/connection.js';
 
 export const data = new SlashCommandBuilder()
   .setName('giveaway-manage')

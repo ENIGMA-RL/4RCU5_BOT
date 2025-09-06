@@ -1,5 +1,7 @@
 import { ChannelType, PermissionFlagsBits, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { ticketsConfig, rolesConfig } from '../../config/configLoader.js';
+import logger from '../../utils/logger.js';
+import { isAdmin, isMod } from '../../utils/permissions.js';
 
 export class TicketManager {
   constructor(client) {
@@ -86,10 +88,10 @@ export class TicketManager {
           }
         } catch (permissionError) {
           if (permissionError.code === 10003) {
-            console.log(`Channel was deleted while setting permissions for role ${roleId}`);
+            logger.warn(`Channel was deleted while setting permissions for role ${roleId}`);
             break; // Stop trying to set permissions if channel is deleted
           }
-          console.error(`Failed to set permissions for role ${roleId}:`, permissionError);
+          logger.error({ err: permissionError }, `Failed to set permissions for role ${roleId}`);
           // Continue with other roles even if one fails
         }
       }
@@ -130,11 +132,11 @@ export class TicketManager {
         });
       } catch (sendError) {
         if (sendError.code === 10003) {
-          console.log('Channel was deleted before welcome message could be sent');
+          logger.warn('Channel was deleted before welcome message could be sent');
           // Channel was deleted, but we still created it successfully
           // The user will see the channel creation success message
         } else {
-          console.error('Failed to send welcome message:', sendError);
+          logger.error({ err: sendError }, 'Failed to send welcome message');
           // Re-throw non-channel-deletion errors
           throw sendError;
         }
@@ -147,7 +149,7 @@ export class TicketManager {
       };
 
     } catch (error) {
-      console.error('Error creating ticket:', error);
+      logger.error({ err: error }, 'Error creating ticket');
       return { success: false, error: 'Failed to create ticket. Please try again.' };
     }
   }
@@ -193,14 +195,9 @@ export class TicketManager {
       // Check if user has permission to close tickets
       const member = interaction.member;
       let hasPermission = false;
-      
       try {
-        hasPermission = member.permissions.has(PermissionFlagsBits.ManageChannels) ||
-          rolesConfig().adminRoles.some(roleId => member.roles.cache.has(roleId)) ||
-          rolesConfig().modRoles?.some(roleId => member.roles.cache.has(roleId));
-      } catch (permissionError) {
-        console.log('Error checking permissions:', permissionError.message);
-        // Default to false if permission check fails
+        hasPermission = member.permissions.has(PermissionFlagsBits.ManageChannels) || isAdmin(member) || isMod(member);
+      } catch {
         hasPermission = false;
       }
 
@@ -216,7 +213,7 @@ export class TicketManager {
           `[${msg.createdAt.toISOString()}] ${msg.author.tag}: ${msg.content || '[No content]'}`
         ).reverse().join('\n');
       } catch (fetchMessagesError) {
-        console.log('Could not fetch ticket messages for archiving:', fetchMessagesError.message);
+        logger.warn(`Could not fetch ticket messages for archiving: ${fetchMessagesError.message}`);
         // Continue with ticket closure even if message archiving fails
       }
 
@@ -239,7 +236,7 @@ export class TicketManager {
       };
 
     } catch (error) {
-      console.error('Error closing ticket:', error);
+      logger.error({ err: error }, 'Error closing ticket');
       return { success: false, error: 'Failed to close ticket. Please try again.' };
     }
   }
@@ -270,7 +267,7 @@ export class TicketManager {
       };
 
     } catch (error) {
-      console.error('Error getting ticket stats:', error);
+      logger.error({ err: error }, 'Error getting ticket stats');
       return { total: 0, open: 0 };
     }
   }

@@ -1,5 +1,5 @@
-import { ApplicationCommandOptionType, PermissionsBitField } from 'discord.js';
-import { isChannelOwner, getChannelOwnerId } from '../../features/voiceChannels/voiceChannelSystem.js';
+import { ApplicationCommandOptionType } from 'discord.js';
+import { isChannelOwner } from '../../features/voiceChannels/voiceChannelSystem.js';
 
 export const data = {
   name: 'vc-allow',
@@ -21,10 +21,11 @@ export const execute = async (interaction) => {
     await interaction.reply({ content: 'You need to be in a voice channel to use this command.', flags: 64 });
     return;
   }
-  if (getChannelOwnerId(channel) !== interaction.member.id) {
+  const fresh = await channel.fetch();
+  if (!(await isChannelOwner(fresh, interaction.member))) {
     await interaction.reply({ content: '❌ Only the channel owner can use this command.', flags: 64 });
     return;
   }
-  await channel.permissionOverwrites.edit(user.id, { [PermissionsBitField.Flags.Connect]: true });
+  await fresh.permissionOverwrites.edit(user.id, { Connect: true });
   await interaction.reply({ content: `✅ ${user.username} is now allowed to join your channel.`, flags: 64 });
 }; 

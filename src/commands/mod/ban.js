@@ -1,7 +1,9 @@
 import { ApplicationCommandOptionType } from 'discord.js';
 import { logModerationAction } from '../../utils/moderationLogger.js';
 import { rolesConfig } from '../../config/configLoader.js';
-import { markUserLeftServer } from '../../database/db.js';
+import { isAdmin, isMod } from '../../utils/permissions.js';
+import { markUserLeftServer } from '../../repositories/usersAdminRepo.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'ban',
@@ -25,11 +27,10 @@ export const data = {
 
 export const execute = async (interaction) => {
   // Check if user has admin or mod permissions
-  const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
-  const isMod = rolesConfig().modRoles.some(roleId => memberRoles.has(roleId));
+  const canAdmin = isAdmin(interaction.member);
+  const canMod = isMod(interaction.member);
   
-  if (!isAdmin && !isMod) {
+  if (!canAdmin && !canMod) {
     await interaction.reply({
       content: '❌ You need admin or mod permissions to use this command.',
       flags: 64
@@ -80,7 +81,7 @@ export const execute = async (interaction) => {
     });
     
   } catch (error) {
-    console.error('Error banning user:', error);
+    logger.error({ err: error }, 'Error banning user');
     await interaction.reply({ 
       content: 'Failed to ban the user. Please check my permissions.', 
       flags: 64 

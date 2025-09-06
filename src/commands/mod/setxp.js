@@ -1,6 +1,15 @@
 import { ApplicationCommandOptionType } from 'discord.js';
-import { updateUserXP, updateUserLevel, getUser, createUser, calculateLevel } from '../../database/db.js';
-import { rolesConfig, botConfig, levelSettingsConfig } from '../../config/configLoader.js';
+import { updateUserXP, updateUserLevel, getUser, createUser } from '../../repositories/usersRepo.js';
+import { levelSettingsConfig } from '../../config/configLoader.js';
+
+function calculateLevel(xp, thresholds) {
+  if (!thresholds || thresholds.length === 0) return 1;
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (xp >= thresholds[i]) return i + 1;
+  }
+  return 1;
+}
+import { rolesConfig, botConfig } from '../../config/configLoader.js';
 
 export const data = {
   name: 'setxp',

@@ -2,14 +2,14 @@
 import { ApplicationCommandOptionType, AttachmentBuilder } from 'discord.js';
 import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
-import { getUserRank } from '../../database/db.js';
+import db from '../../database/connection.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { channelsConfig, commandCooldownsConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import { shouldBypassChannelRestrictions as bypassCheck } from '../../utils/channelUtils.js';
-import { checkCooldown, setCooldown, formatRemainingTime } from '../../utils/cooldownManager.js';
-import { getCooldownDuration } from '../../utils/cooldownStorage.js';
+import { check as cdCheck, set as cdSet, formatRemaining as cdFormat } from '../../services/CooldownService.js';
+import logger from '../../utils/logger.js';
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -44,24 +44,11 @@ export const execute = async (interaction) => {
     const cooldownConfig = commandCooldownsConfig();
     const rankCooldown = cooldownConfig?.commands?.rank;
     
-    // Get cooldown duration (prioritize dynamic over config)
-    const cooldownDuration = getCooldownDuration('rank');
-    
-    if (rankCooldown?.enabled && cooldownDuration) {
-      const memberRoles = interaction.member.roles.cache.map(role => role.id);
-      const cooldownCheck = checkCooldown(
-        interaction.user.id, 
-        'rank', 
-        cooldownDuration, 
-        memberRoles
-      );
-      
-      if (cooldownCheck.onCooldown) {
-        const remainingTime = formatRemainingTime(cooldownCheck.remainingTime);
-        await interaction.reply({
-          content: `⏰ You can use this command again in **${remainingTime}**`,
-          flags: 64
-        });
+    if (rankCooldown?.enabled) {
+      const res = cdCheck(interaction.member, 'rank');
+      if (res.onCooldown) {
+        const remaining = cdFormat(res.remainingTime);
+        await interaction.reply({ content: `⏰ You can use this command again in **${remaining}**`, flags: 64 });
         return;
       }
     }
@@ -80,7 +67,16 @@ export const execute = async (interaction) => {
     }
 
     // Get server rank
-    const serverRank = getUserRank(userId);
+    const serverRank = db.prepare(`
+      SELECT COUNT(*) + 1 as rank
+      FROM users 
+      WHERE (xp + voice_xp) > (
+        SELECT (xp + voice_xp) 
+        FROM users 
+        WHERE user_id = ? AND (left_server = 0 OR left_server IS NULL)
+      )
+      AND (left_server = 0 OR left_server IS NULL)
+    `).get(userId)?.rank || null;
     
     // Load level settings
     const levelSettings = levelSettingsConfig();
@@ -104,16 +100,16 @@ export const execute = async (interaction) => {
     await interaction.editReply({ files: [attachment] });
 
     // Set cooldown after successful execution
-    if (rankCooldown?.enabled && cooldownDuration) {
-      setCooldown(interaction.user.id, 'rank');
+    if (rankCooldown?.enabled) {
+      cdSet(interaction.member, 'rank');
     }
 
   } catch (error) {
-    console.error('Error in rank command:', error);
+    logger.error({ err: error }, 'Error in rank command');
     try {
       fs.appendFileSync('./rank-error.log', `[${new Date().toISOString()}] ${error.stack || error}\n`);
     } catch (logErr) {
-      console.error('Failed to write to rank-error.log:', logErr);
+      logger.error({ err: logErr }, 'Failed to write to rank-error.log');
     }
     try {
       if (interaction.deferred) {
@@ -122,7 +118,7 @@ export const execute = async (interaction) => {
         await interaction.reply({ content: '❌ There was an error while executing this command.', flags: 64 });
       }
     } catch (replyError) {
-      console.error('Error sending error reply:', replyError);
+      logger.error({ err: replyError }, 'Error sending error reply');
     }
   }
 };
@@ -146,7 +142,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
       const background = await loadImage(backgroundPath);
       ctx.drawImage(background, 0, 0, width, height);
     } catch (error) {
-      console.error('Error loading background:', error);
+      logger.error({ err: error }, 'Error loading background');
     }
   }
 
@@ -163,6 +159,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   const cardPaddingY = 42;
 
   // Draw card
+  const ctxSave = ctx.save.bind(ctx);
   ctx.save();
   ctx.shadowColor = 'rgba(0,0,0,0.25)';
   ctx.shadowBlur = 18;
@@ -195,7 +192,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
     ctx.drawImage(asciiLogo, logoX, logoY, logoWidth, logoHeight);
     ctx.globalAlpha = 1.0;
   } catch (e) {
-    console.error('Error loading CNS-ascii logo:', e);
+    logger.error({ err: e }, 'Error loading CNS-ascii logo');
   }
 
   // Draw avatar
@@ -209,7 +206,7 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
     ctx.drawImage(avatar, avatarX, avatarY, avatarSize, avatarSize);
     ctx.restore();
   } catch (error) {
-    console.error('Error loading avatar:', error);
+    logger.error({ err: error }, 'Error loading avatar');
   }
 
   // User info section

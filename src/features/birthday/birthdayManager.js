@@ -1,4 +1,4 @@
-import db from '../../database/db.js';
+import { listBirthdaysForDay, getUserBirthday, removeUserBirthday, updateBirthdayUsername } from '../../repositories/birthdaysRepo.js';
 import { channelsConfig, rolesConfig } from '../../config/configLoader.js';
 import { logRoleChange } from '../../utils/botLogger.js';
 
@@ -43,13 +43,7 @@ export async function checkBirthdays(client) {
     const currentHour = today.getHours();
 
     // Get all birthdays for today
-    const stmt = db.prepare(`
-      SELECT user_id, guild_id, birth_day, birth_month, birth_year
-      FROM birthdays 
-      WHERE birth_day = ? AND birth_month = ?
-    `);
-    
-    const birthdays = stmt.all(currentDay, currentMonth);
+    const birthdays = listBirthdaysForDay(currentDay, currentMonth);
 
     for (const birthday of birthdays) {
       const guild = client.guilds.cache.get(birthday.guild_id);
@@ -136,34 +130,14 @@ async function removeBirthdayRole(member, birthdayRole) {
 /**
  * Get user's birthday info (without year for privacy)
  */
-export function getUserBirthday(userId, guildId) {
-  const stmt = db.prepare(`
-    SELECT birth_day, birth_month, created_at
-    FROM birthdays 
-    WHERE user_id = ? AND guild_id = ?
-  `);
-  return stmt.get(userId, guildId);
-}
+export { getUserBirthday };
 
 /**
  * Remove user's birthday
  */
-export function removeUserBirthday(userId, guildId) {
-  const stmt = db.prepare(`
-    DELETE FROM birthdays 
-    WHERE user_id = ? AND guild_id = ?
-  `);
-  return stmt.run(userId, guildId);
-}
+export { removeUserBirthday };
 
 /**
  * Update username for existing birthday entries
  */
-export function updateBirthdayUsername(userId, guildId, username) {
-  const stmt = db.prepare(`
-    UPDATE birthdays 
-    SET username = ? 
-    WHERE user_id = ? AND guild_id = ?
-  `);
-  return stmt.run(username, userId, guildId);
-} 
+export { updateBirthdayUsername };

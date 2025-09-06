@@ -1,6 +1,6 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
-import { markUserActive, markUserLeftServer } from '../../database/db.js';
+import { markUserActive, markUserLeftServer } from '../../repositories/usersAdminRepo.js';
 
 export const data = {
   name: 'set-activity-status',

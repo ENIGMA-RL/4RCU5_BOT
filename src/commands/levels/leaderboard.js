@@ -5,8 +5,8 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { channelsConfig, commandCooldownsConfig } from '../../config/configLoader.js';
 import { shouldBypassChannelRestrictions } from '../../utils/channelUtils.js';
-import { checkCooldown, setCooldown, formatRemainingTime } from '../../utils/cooldownManager.js';
-import { getCooldownDuration } from '../../utils/cooldownStorage.js';
+import { check as cdCheck, set as cdSet, formatRemaining as cdFormat } from '../../services/CooldownService.js';
+import logger from '../../utils/logger.js';
 
 // ES module equivalent of __dirname
 const __filename = fileURLToPath(import.meta.url);
@@ -65,23 +65,11 @@ export const execute = async (interaction) => {
     const leaderboardCooldown = cooldownConfig?.commands?.leaderboard;
     
     // Get cooldown duration (prioritize dynamic over config)
-    const cooldownDuration = getCooldownDuration('leaderboard');
-    
-    if (leaderboardCooldown?.enabled && cooldownDuration) {
-      const memberRoles = interaction.member.roles.cache.map(role => role.id);
-      const cooldownCheck = checkCooldown(
-        interaction.user.id, 
-        'leaderboard', 
-        cooldownDuration, 
-        memberRoles
-      );
-      
-      if (cooldownCheck.onCooldown) {
-        const remainingTime = formatRemainingTime(cooldownCheck.remainingTime);
-        await interaction.reply({
-          content: `⏰ You can use this command again in **${remainingTime}**`,
-          flags: 64
-        });
+    if (leaderboardCooldown?.enabled) {
+      const res = cdCheck(interaction.member, 'leaderboard');
+      if (res.onCooldown) {
+        const remaining = cdFormat(res.remainingTime);
+        await interaction.reply({ content: `⏰ You can use this command again in **${remaining}**`, flags: 64 });
         return;
       }
     }
@@ -106,7 +94,7 @@ export const execute = async (interaction) => {
     // Extract only user IDs for current page (deduped)
     const allUserIds = [...new Set([...pagedTextRaw.map(u => u.user_id), ...pagedVoiceRaw.map(u => u.user_id)])];
     
-    console.log(`🔍 Processing ${textUsers.length} text users and ${voiceUsers.length} voice users (${allUserIds.length} unique users)`);
+    logger.debug(`Processing ${textUsers.length} text users and ${voiceUsers.length} voice users (${allUserIds.length} unique users)`);
     
     // Check cache first and only fetch uncached users
     const uncachedIds = [];
@@ -121,7 +109,7 @@ export const execute = async (interaction) => {
       }
     }
     
-    console.log(`💾 Using ${cachedUsers.size} cached users, fetching ${uncachedIds.length} new users`);
+    logger.debug(`Using ${cachedUsers.size} cached users, fetching ${uncachedIds.length} new users`);
     
     // Batch fetch only uncached users from Discord API
     let newUsers = [];
@@ -149,11 +137,8 @@ export const execute = async (interaction) => {
     const textUserInfos = await processTextUsers(pagedTextRaw, userMap);
     const voiceUserInfos = await processVoiceUsers(pagedVoiceRaw, userMap);
     
-    console.log(`📊 After processing: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
-
-    console.log(`📄 Page ${page}: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
-    console.log(`📝 Text users for page:`, textUserInfos.map(u => u.username));
-    console.log(`🎤 Voice users for page:`, voiceUserInfos.map(u => u.username));
+    logger.debug(`After processing: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
+    logger.debug(`Page ${page}: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
 
     // Ensure we have enough users for the page
     if (textUserInfos.length === 0 && voiceUserInfos.length === 0) {
@@ -170,12 +155,12 @@ export const execute = async (interaction) => {
     });
 
     // Set cooldown after successful execution
-    if (leaderboardCooldown?.enabled && cooldownDuration) {
-      setCooldown(interaction.user.id, 'leaderboard');
+    if (leaderboardCooldown?.enabled) {
+      cdSet(interaction.member, 'leaderboard');
     }
 
   } catch (error) {
-    console.error('Error in leaderboard command:', error);
+    logger.error({ err: error }, 'Error in leaderboard command');
     try {
       if (interaction.replied || interaction.deferred || deferred) {
         await interaction.editReply({
@@ -189,7 +174,7 @@ export const execute = async (interaction) => {
       }
     } catch (err) {
       // If we can't reply, just log
-      console.error('Failed to send error reply:', err);
+      logger.error({ err }, 'Failed to send error reply');
     }
   }
 };
@@ -201,7 +186,7 @@ async function processTextUsers(textUsers, userMap) {
   for (const u of textUsers) {
     const user = userMap.get(u.user_id);
     if (!user) {
-      console.log(`❌ Skipping deleted text user: ${u.user_id}`);
+      logger.debug(`Skipping deleted text user: ${u.user_id}`);
       continue;
     }
     
@@ -211,7 +196,7 @@ async function processTextUsers(textUsers, userMap) {
       username: user.username, 
       avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 })
     });
-    console.log(`✅ Text user: ${user.username} (${u.user_id})`);
+    logger.debug(`Text user: ${user.username} (${u.user_id})`);
   }
   
   return textUserInfos;
@@ -224,7 +209,7 @@ async function processVoiceUsers(voiceUsers, userMap) {
   for (const u of voiceUsers) {
     const user = userMap.get(u.user_id);
     if (!user) {
-      console.log(`❌ Skipping deleted voice user: ${u.user_id}`);
+      logger.debug(`Skipping deleted voice user: ${u.user_id}`);
       continue;
     }
     
@@ -234,46 +219,39 @@ async function processVoiceUsers(voiceUsers, userMap) {
       username: user.username, 
       avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 })
     });
-    console.log(`✅ Voice user: ${user.username} (${u.user_id})`);
+    logger.debug(`Voice user: ${user.username} (${u.user_id})`);
   }
   
   return voiceUserInfos;
 }
 
 async function createLeaderboardCard(textUsers, voiceUsers, page) {
-  console.log(`🎨 createLeaderboardCard called with:`);
-  console.log(`   textUsers: ${textUsers.length} users:`, textUsers.map(u => u.username));
-  console.log(`   voiceUsers: ${voiceUsers.length} users:`, voiceUsers.map(u => u.username));
-  console.log(`   page: ${page}`);
+  logger.trace('createLeaderboardCard called with', { textCount: textUsers.length, voiceCount: voiceUsers.length, page });
   
   const width = 900;
   const height = 856;
   const canvas = createCanvas(width, height);
   const ctx = canvas.getContext('2d');
   
-  console.log('Canvas created successfully, dimensions:', canvas.width, 'x', canvas.height);
+  logger.trace('Canvas created successfully', { width: canvas.width, height: canvas.height });
   
   // Test basic canvas operations
   try {
     ctx.fillStyle = '#000000';
     ctx.fillRect(0, 0, 10, 10);
-    console.log('Basic canvas operations working');
+    logger.trace('Basic canvas operations working');
   } catch (error) {
-    console.error('Basic canvas operations failed:', error);
+    logger.error({ err: error }, 'Basic canvas operations failed');
   }
 
   // Load and draw background image (same as rank card)
   const backgroundPath = path.join(__dirname, '../../assets/backgrounds/rank-background.png');
-  console.log('Current working directory:', process.cwd());
-  console.log('__dirname:', __dirname);
-  console.log('Background path resolved to:', backgroundPath);
-  console.log('File exists:', fs.existsSync(backgroundPath));
-  console.log('File stats:', fs.existsSync(backgroundPath) ? fs.statSync(backgroundPath) : 'File not found');
+  logger.trace('Background path info', { cwd: process.cwd(), __dirname, backgroundPath, exists: fs.existsSync(backgroundPath) });
   
   const background = await loadImage(backgroundPath);
-  console.log('Background image loaded successfully, dimensions:', background.width, 'x', background.height);
+  logger.trace('Background image loaded', { width: background.width, height: background.height });
   ctx.drawImage(background, 0, 0, width, height);
-  console.log('Background image drawn to canvas');
+  logger.trace('Background image drawn to canvas');
 
   // Card settings
   const cardX = 40;
@@ -349,7 +327,7 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
           ctx.drawImage(avatarImg, col1X + 20, y, avatarSize, avatarSize);
           ctx.restore();
         } catch (error) {
-          console.error('Error loading avatar for user:', user.username, error);
+          logger.error({ err: error, username: user.username }, 'Error loading avatar for text user');
           // Draw a placeholder circle if avatar fails to load
           ctx.restore();
           ctx.fillStyle = '#666';
@@ -387,7 +365,7 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
           ctx.drawImage(avatarImg, col2X + 20, y, avatarSize, avatarSize);
           ctx.restore();
         } catch (error) {
-          console.error('Error loading avatar for user:', vuser.username, error);
+          logger.error({ err: error, username: vuser.username }, 'Error loading avatar for voice user');
           // Draw a placeholder circle if avatar fails to load
           ctx.restore();
           ctx.fillStyle = '#666';

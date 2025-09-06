@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import fs from 'fs';
+import logger from './logger.js';
 
 const botConfigSchema = z.object({
   prefix: z.string(),
@@ -34,8 +35,8 @@ try {
   validateConfig('./src/config/roles.json', rolesConfigSchema);
   validateConfig('./src/config/leveling.json', levelingConfigSchema);
   validateConfig('./src/config/events.json', eventsConfigSchema);
-  console.log('All configurations are valid.');
+  logger.info('All configurations are valid.');
 } catch (error) {
-  console.error('Configuration validation error:', error);
+  logger.error({ err: error }, 'Configuration validation error');
   process.exit(1);
 } 

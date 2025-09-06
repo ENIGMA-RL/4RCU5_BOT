@@ -6,6 +6,7 @@ import {
   ActionRowBuilder,
 } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { isAdmin } from '../../utils/permissions.js';
 
 export const data = {
   name: 'reply as bot',
@@ -13,9 +14,8 @@ export const data = {
 };
 
 export const execute = async (interaction) => {
-  const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig().adminRoles.some(id => memberRoles.has(id));
-  if (!isAdmin) return interaction.reply({ content: '🚫 admin only', flags: 64 });
+  const canAdmin = isAdmin(interaction.member);
+  if (!canAdmin) return interaction.reply({ content: '🚫 admin only', flags: 64 });
 
   const targetId = interaction.targetId;
 

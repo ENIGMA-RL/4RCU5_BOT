@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path, { dirname } from 'path';
 import { fileURLToPath } from 'url';
+import logger from '../utils/logger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -12,14 +13,20 @@ const loadEvents = async (client) => {
   // console.log(`📁 Found ${eventFiles.length} event files: ${eventFiles.join(', ')}`);
   
   for (const file of eventFiles) {
-    // console.log(`🔄 Loading event: ${file}`);
-    const event = await import(`../events/${file}`);
-    if (event.once) {
-      client.once(event.name, (...args) => event.execute(...args));
-      // console.log(`✅ Loaded once event: ${event.name}`);
-    } else {
-      client.on(event.name, (...args) => event.execute(...args));
-      // console.log(`✅ Loaded event: ${event.name}`);
+    try {
+      const event = await import(`../events/${file}`);
+      if (!event?.name || typeof event.execute !== 'function') {
+        logger.warn({ file }, 'Skipping invalid event file');
+        continue;
+      }
+      if (event.once) {
+        client.once(event.name, (...args) => event.execute(...args));
+      } else {
+        client.on(event.name, (...args) => event.execute(...args));
+      }
+      logger.debug(`Loaded event: ${event.name}`);
+    } catch (err) {
+      logger.error({ err, file }, 'Failed to load event file; continuing');
     }
   }
   // console.log('🎉 Events loaded successfully!');

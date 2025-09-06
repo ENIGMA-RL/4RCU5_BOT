@@ -1,8 +1,9 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
-import { setCooldown } from '../../utils/cooldownManager.js';
+import { set as cdSet } from '../../services/CooldownService.js';
 import { commandCooldownsConfig, channelsConfig, staffConfig } from '../../config/configLoader.js';
 import { getCooldownCommandChoices, parseDuration } from '../../utils/cooldownCommandHelper.js';
 import { setCooldownDuration, getCooldownDuration } from '../../utils/cooldownStorage.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'cooldown',
@@ -67,7 +68,7 @@ export const execute = async (interaction) => {
         setCooldownDuration(command, durationMinutes, interaction.user.tag);
         
         // Also set a test cooldown for the user
-        setCooldown(interaction.user.id, command);
+        cdSet(interaction.member, command);
         
         await interaction.reply({
           content: `⏰ Cooldown set for **${command}** (${durationMinutes} minutes). This will persist across bot restarts.`,
@@ -84,7 +85,7 @@ export const execute = async (interaction) => {
     }
 
   } catch (error) {
-    console.error('Error in cooldown command:', error);
+    logger.error({ err: error }, 'Error in cooldown command');
     await interaction.reply({
       content: '❌ An error occurred while executing this command.',
       flags: 64
@@ -112,6 +113,6 @@ async function logCooldownAction(interaction, command, durationMinutes) {
       await modLogChannel.send({ embeds: [logEmbed] });
     }
   } catch (logError) {
-    console.error('Failed to log cooldown action:', logError);
+    logger.error({ err: logError }, 'Failed to log cooldown action');
   }
 } 

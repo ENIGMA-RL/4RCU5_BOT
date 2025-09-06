@@ -1,5 +1,5 @@
 import { ApplicationCommandOptionType } from 'discord.js';
-import { limitVoiceChannel, isChannelOwner, getChannelOwnerId } from '../../features/voiceChannels/voiceChannelSystem.js';
+import { limitVoiceChannel, isChannelOwner } from '../../features/voiceChannels/voiceChannelSystem.js';
 
 export const data = {
   name: 'vc-limit',
@@ -18,7 +18,8 @@ export const execute = async (interaction) => {
   const userLimit = interaction.options.getInteger('limit');
   const channel = interaction.member.voice.channel;
   if (channel) {
-    if (getChannelOwnerId(channel) !== interaction.member.id) {
+    const fresh = await channel.fetch();
+    if (!(await isChannelOwner(fresh, interaction.member))) {
       await interaction.reply({ content: '❌ Only the channel owner can use this command.', flags: 64 });
       return;
     }

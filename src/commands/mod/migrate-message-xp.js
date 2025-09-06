@@ -1,4 +1,4 @@
-import { updateUserXP, getUser, createUser } from '../../database/db.js';
+import { updateUserXP, getUser, createUser } from '../../repositories/usersRepo.js';
 import { levelSettingsConfig, rolesConfig } from '../../config/configLoader.js';
 
 export const data = {

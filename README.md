@@ -113,8 +113,8 @@ npm run dev    # Development
 
 ## Commands
 
-### General (12)
-- `/help`, `/info`, `/ping`, `/say`, `/refreshstats`, `/refreshstaff`, `/birthday`, `/funfact`, `/dadjoke`, `/replyAsBot`, `/tagstatus`, `/giveaway`
+### General (13)
+- `/help`, `/info`, `/ping`, `/say`, `/refreshstats`, `/refreshstaff`, `/birthday`, `/birthday-list`, `/funfact`, `/dadjoke`, `/replyAsBot`, `/tagstatus`, `/giveaway`
 
 ### Leveling (8)
 - `/levels`, `/leaderboard`, `/rank`, `/setbackground`, `/synclevelroles`, `/dev-xp-leaderboard`, `/recalculate-levels`, `/roles`
