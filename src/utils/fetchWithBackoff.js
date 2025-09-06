@@ -1,12 +1,19 @@
-import Bottleneck from 'bottleneck';
 import fetch from 'node-fetch';
 import logger from './logger.js';
 
-// Shared limiter: modest pace to smooth bursts
-const limiter = new Bottleneck({
-  minTime: 80,
-  maxConcurrent: 1
-});
+// Lazy-initialize limiter; gracefully fallback if bottleneck is unavailable
+let schedule = (fn) => fn();
+(async () => {
+  try {
+    const mod = await import('bottleneck');
+    const Bottleneck = mod.default || mod;
+    const limiter = new Bottleneck({ minTime: 80, maxConcurrent: 1 });
+    schedule = (fn) => limiter.schedule(fn);
+    logger.debug('[fetchWithBackoff] Using Bottleneck limiter');
+  } catch (e) {
+    logger.warn('[fetchWithBackoff] Bottleneck not found; using basic limiter');
+  }
+})();
 
 // Simple circuit breaker
 let circuitOpenUntil = 0;
@@ -46,7 +53,7 @@ export async function fetchWithBackoff(url, options = {}, opts = {}) {
     }
 
     try {
-      const res = await limiter.schedule(() => fetch(url, options));
+      const res = await schedule(() => fetch(url, options));
 
       // 2xx OK
       if (res.ok) {
