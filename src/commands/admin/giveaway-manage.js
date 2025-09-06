@@ -6,7 +6,7 @@ import { countActiveEntries } from '../../repositories/giveawaysRepo.js';
 
 export const data = new SlashCommandBuilder()
   .setName('giveaway-manage')
-  .setDescription('Manage a giveaway via an ephemeral panel')
+  .setDescription('Manage a giveaway via a private panel')
   .addStringOption(o =>
     o.setName('giveaway_id')
      .setDescription('Optional explicit giveaway id')
@@ -17,7 +17,7 @@ export async function execute(interaction) {
   const cfg = giveawayConfig();
   const isAdmin = cfg.admin_role_ids?.some(r => interaction.member.roles.cache.has(r));
   if (!isAdmin) {
-    return interaction.reply({ content: '❌ not allowed', ephemeral: true });
+    return interaction.reply({ content: '❌ not allowed', flags: 64 });
   }
 
   // 1) Bepaal target giveaway-id
@@ -39,13 +39,13 @@ export async function execute(interaction) {
   }
 
   if (!id) {
-    return interaction.reply({ content: '❌ no target giveaway found for this channel', ephemeral: true });
+    return interaction.reply({ content: '❌ no target giveaway found for this channel', flags: 64 });
   }
 
   // 2) Haal actuele staat op (voor status/ends/entries)
   const gv = db.prepare(`SELECT * FROM giveaways WHERE id = ?`).get(id);
   if (!gv) {
-    return interaction.reply({ content: `❌ giveaway not found: ${id}`, ephemeral: true });
+    return interaction.reply({ content: `❌ giveaway not found: ${id}`, flags: 64 });
   }
 
   const entries = countActiveEntries(id);
@@ -100,7 +100,7 @@ export async function execute(interaction) {
   );
 
   return interaction.reply({
-    ephemeral: true,
+    flags: 64,
     embeds: [embed],
     components: [row1, row2]
   });
