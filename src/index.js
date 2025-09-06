@@ -21,6 +21,7 @@ import { tick as voiceTick } from './features/leveling/voiceSessionService.js';
 // Ensure database schema and migrations are applied on startup
 import './database/db.js';
 import { registerTagSync } from './features/tag-sync/index.js';
+import TagService from './services/tagService.js';
 
 // Load environment variables
 dotenv.config();
@@ -32,7 +33,8 @@ const client = new Client({
     GatewayIntentBits.GuildMembers, // REQUIRED for member updates!
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.MessageContent, // REQUIRED for message content access
-    GatewayIntentBits.GuildVoiceStates
+    GatewayIntentBits.GuildVoiceStates,
+    GatewayIntentBits.GuildPresences
   ],
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User]
 });
@@ -218,16 +220,30 @@ client.once('ready', async () => {
   // Register real-time tag sync on user profile changes (OAuth/API primary_guild)
   try {
     const roleCfg = rolesConfig();
-    const mainGuildId = roleCfg.mainGuildId || roleCfg.main_guild_id || null;
+    const mainGuildId = roleCfg.mainGuildId || roleCfg.main_guild_id || null; // TARGET guild to grant/remove the role
+    // Identity guild to check server tag against: prefer configured tag guild (prod main), fallback to main
+    const identityGuildId = roleCfg.tagGuildId || roleCfg.tagSourceGuildId || mainGuildId;
     const tagRoleId = roleCfg.cnsOfficialRole || roleCfg.cns_official_role || null;
-    if (mainGuildId && tagRoleId) {
-      registerTagSync(client, { guildId: mainGuildId, roleId: tagRoleId });
-      logger.info({ mainGuildId, tagRoleId }, 'UserUpdate listener registered for tag sync');
+    if (identityGuildId && mainGuildId && tagRoleId) {
+      registerTagSync(client, { identityGuildId, targetGuildId: mainGuildId, targetRoleId: tagRoleId });
+      logger.info({ identityGuildId, mainGuildId, tagRoleId }, 'UserUpdate listener registered for tag sync');
     } else {
-      logger.warn({ mainGuildId, tagRoleId }, 'Skipping UserUpdate listener registration (missing IDs)');
+      logger.warn({ identityGuildId, mainGuildId, tagRoleId }, 'Skipping UserUpdate listener registration (missing IDs)');
     }
   } catch (e) {
     logger.error({ err: e }, 'Failed to register UserUpdate listener for tag sync');
+  }
+
+  // Start TagService once (mirrors from tag guild events and covers join/leave)
+  try {
+    if (!client.__tagServiceStarted) {
+      const tagSvc = new TagService(client);
+      tagSvc.start();
+      client.__tagServiceStarted = true;
+      logger.info('TagService started');
+    }
+  } catch (e) {
+    logger.error({ err: e }, 'Failed to start TagService');
   }
 });
 
