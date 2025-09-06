@@ -7,7 +7,7 @@ import { fetchWithBackoff } from '../../utils/fetchWithBackoff.js';
 export async function botTokenHasTag({ userId, client }) {
   const res = await fetchWithBackoff(
     `https://discord.com/api/users/${userId}`,
-    { headers: { Authorization: `Bot ${client.token}` } },
+    { headers: { Authorization: `Bot ${client.token}`, 'X-Track': '1' } },
     { name: 'discord:getUser' }
   );
   if (!res.ok) return { ok: false, isUsingTag: false };
@@ -24,7 +24,7 @@ export async function botTokenHasTag({ userId, client }) {
 export async function oauthHasTag({ accessToken }) {
   const res = await fetchWithBackoff(
     'https://discord.com/api/users/@me',
-    { headers: { Authorization: `Bearer ${accessToken}` } },
+    { headers: { Authorization: `Bearer ${accessToken}`, 'X-Track': '1' } },
     { name: 'discord:getMe' }
   );
   if (!res.ok) return { ok: false, isUsingTag: false };
