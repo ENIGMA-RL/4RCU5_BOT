@@ -3,6 +3,7 @@ import { ApplicationCommandOptionType, AttachmentBuilder } from 'discord.js';
 import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getUserLevelData } from '../../features/leveling/levelingSystem.js';
 import db from '../../database/connection.js';
+import { getServerRankActive } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -66,17 +67,8 @@ export const execute = async (interaction) => {
       return;
     }
 
-    // Get server rank
-    const serverRank = db.prepare(`
-      SELECT COUNT(*) + 1 as rank
-      FROM users 
-      WHERE (xp + voice_xp) > (
-        SELECT (xp + voice_xp) 
-        FROM users 
-        WHERE user_id = ? AND (left_server = 0 OR left_server IS NULL)
-      )
-      AND (left_server = 0 OR left_server IS NULL)
-    `).get(userId)?.rank || null;
+    // Get server rank among active users only
+    const serverRank = getServerRankActive(userId, 'total');
     
     // Load level settings
     const levelSettings = levelSettingsConfig();

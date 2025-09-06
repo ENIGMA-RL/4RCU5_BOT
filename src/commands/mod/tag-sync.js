@@ -1,6 +1,7 @@
 import { EmbedBuilder } from 'discord.js';
-import { syncTagRolesFromGuild, syncAllUserTags } from '../../features/tagSync/tagSyncService.js';
 import { rolesConfig, isDev } from '../../config/configLoader.js';
+import { fetchRoleHolders } from '../../utils/discordHelpers.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'tag-sync',
@@ -49,13 +50,42 @@ export const execute = async (interaction) => {
     }
     
     const syncType = interaction.options.getString('type') || 'full';
-    
-    let result;
-    if (syncType === 'bulk') {
-      result = await syncAllUserTags(interaction.guild, interaction.client);
-    } else {
-      result = await syncTagRolesFromGuild(interaction.guild, interaction.client);
+
+    // Config: source guild (tag holders), destination guild (CNS)
+    const roles = rolesConfig();
+    const SRC_GUILD_ID = roles.tagSourceGuildId ?? roles.tagGuildId; // fallback to existing key
+    const SRC_ROLE_ID  = roles.tagSourceRoleId ?? roles.cnsOfficialRole; // adjust per config
+    const DST_GUILD_ID = process.env.GUILD_ID;
+    const DST_ROLE_ID  = roles.cnsOfficialRole;
+
+    const srcGuild = await interaction.client.guilds.fetch(SRC_GUILD_ID);
+    const dstGuild = await interaction.client.guilds.fetch(DST_GUILD_ID);
+
+    const srcHolders = await fetchRoleHolders(srcGuild, SRC_ROLE_ID);
+    const dstMembers = await dstGuild.members.fetch();
+    const srcIds = new Set([...srcHolders.keys()]);
+
+    let added = 0, removed = 0;
+
+    // Add
+    for (const [, member] of dstMembers) {
+      const shouldHave = srcIds.has(member.id);
+      const hasDst = member.roles.cache.has(DST_ROLE_ID);
+      if (shouldHave && !hasDst) {
+        try { await member.roles.add(DST_ROLE_ID, 'mirror tag from source guild'); added++; } catch (e) { logger.warn({ err: e }, 'add role failed'); }
+      }
     }
+
+    // Remove (optional)
+    for (const [, member] of dstMembers) {
+      const shouldHave = srcIds.has(member.id);
+      const hasDst = member.roles.cache.has(DST_ROLE_ID);
+      if (hasDst && !shouldHave) {
+        try { await member.roles.remove(DST_ROLE_ID, 'mirror tag removed in source guild'); removed++; } catch (e) { logger.warn({ err: e }, 'remove role failed'); }
+      }
+    }
+
+    const result = { count: srcIds.size, updated: added, removed };
 
     if (isDev() && !allowDevWrites) {
       const embed = new EmbedBuilder()
@@ -101,7 +131,7 @@ export const execute = async (interaction) => {
       await interaction.editReply({ embeds: [embed] });
     }
   } catch (error) {
-    console.error('Error in tag-sync command:', error);
+    logger.error({ err: error }, 'Error in tag-sync command');
     await interaction.editReply({
       content: '❌ An error occurred while executing the tag sync command.',
       flags: 64

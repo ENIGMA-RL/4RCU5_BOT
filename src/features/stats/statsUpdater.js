@@ -24,6 +24,8 @@ export async function updateStats(client, guildId, channelId) {
       return;
     }
 
+    // Ensure full member cache before counting
+    await guild.members.fetch();
     // Calculate member count (excluding bots)
     const totalMembers = guild.memberCount;
     const botCount = guild.members.cache.filter(member => member.user.bot).size;
@@ -31,7 +33,7 @@ export async function updateStats(client, guildId, channelId) {
 
     // Calculate CNS tags count (members with CNS Official role)
     const cnsOfficialRole = await guild.roles.fetch(rolesConfig().cnsOfficialRole);
-    const cnsTagsCount = cnsOfficialRole ? cnsOfficialRole.members.size : 0;
+    const cnsTagsCount = cnsOfficialRole ? guild.members.cache.filter(m => m.roles.cache.has(cnsOfficialRole.id)).size : 0;
 
     // Get server boost count
     const boostCount = guild.premiumSubscriptionCount;

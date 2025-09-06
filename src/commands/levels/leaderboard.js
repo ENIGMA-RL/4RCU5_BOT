@@ -143,60 +143,38 @@ export const execute = async (interaction) => {
     // Get page argument
     const page = interaction.options.getInteger('page') || 1;
     const pageSize = 10;
-    const offset = (page - 1) * pageSize;
 
-    // Get users once and sort for both columns
-    const allUsers = await getTopUsersByType('total', 1000);
-    const textUsers = [...allUsers].sort((a, b) => b.xp - a.xp);
-    const voiceUsers = [...allUsers].sort((a, b) => b.voice_xp - a.voice_xp);
+    // Active users only, then sort for both columns
+    const allUsers = await getTopUsersByType('total', 5000, { activeOnly: true });
+    const textSorted  = [...allUsers].sort((a, b) => b.xp - a.xp);
+    const voiceSorted = [...allUsers].sort((a, b) => b.voice_xp - a.voice_xp);
 
-    // Determine only the users needed for the requested page
-    const pagedTextRaw = textUsers.slice(offset, offset + pageSize);
-    const pagedVoiceRaw = voiceUsers.slice(offset, offset + pageSize);
+    // Ensure we backfill each page to 10 by scanning forward
+    function getCachedMemberLocal(id) { return getCachedMember(id); }
+    function setCachedMemberLocal(id, m) { cacheMember(id, m); }
+    async function ensureMember(id) {
+      const c = getCachedMemberLocal(id) || interaction.guild.members.cache.get(id);
+      if (c) return c;
+      try { const m = await interaction.guild.members.fetch(id); setCachedMemberLocal(id, m); return m; } catch { return null; }
+    }
 
-    // Extract only user IDs for current page (deduped)
-    const allUserIds = [...new Set([...pagedTextRaw.map(u => u.user_id), ...pagedVoiceRaw.map(u => u.user_id)])];
-    
-    logger.debug(`Processing ${textUsers.length} text users and ${voiceUsers.length} voice users (${allUserIds.length} unique users)`);
-    
-    // Check cache first and only fetch uncached members
-    const uncachedIds = [];
-    const cachedMembers = new Map();
-    
-    for (const userId of allUserIds) {
-      const cached = getCachedMember(userId);
-      if (cached) {
-        cachedMembers.set(userId, cached);
-      } else {
-        uncachedIds.push(userId);
+    const offsetLocal = (page - 1) * pageSize;
+    async function buildPage(sorted) {
+      const out = [];
+      let i = offsetLocal;
+      while (out.length < pageSize && i < sorted.length) {
+        const u = sorted[i++];
+        const m = await ensureMember(u.user_id);
+        if (!m) continue;
+        out.push({ ...u, username: m.displayName || m.user.username, avatarURL: m.user.displayAvatarURL({ extension: 'png', size: 128 }) });
       }
+      return out;
     }
-    
-    logger.debug(`Using ${cachedMembers.size} cached members, fetching ${uncachedIds.length} new members`);
-    
-    // Batch fetch only uncached members from Discord API
-    let newUsers = [];
-    if (uncachedIds.length > 0) {
-      newUsers = await Promise.all(
-        uncachedIds.map(id => interaction.guild.members.fetch(id).catch(() => null))
-      );
-      
-      // Cache the newly fetched members
-      newUsers.forEach((member, index) => {
-        if (member) {
-          const userId = uncachedIds[index];
-          cacheMember(userId, member);
-          cachedMembers.set(userId, member);
-        }
-      });
-    }
-    
-    // Create a map for fast member lookup (combines cached and new)
-    const userMap = cachedMembers;
-    
-    // Process only current page users
-    const textUserInfos = await processTextUsers(pagedTextRaw, userMap);
-    const voiceUserInfos = await processVoiceUsers(pagedVoiceRaw, userMap);
+
+    const [textUserInfos, voiceUserInfos] = await Promise.all([
+      buildPage(textSorted),
+      buildPage(voiceSorted)
+    ]);
     
     logger.debug(`After processing: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
     logger.debug(`Page ${page}: ${textUserInfos.length} text users, ${voiceUserInfos.length} voice users`);
