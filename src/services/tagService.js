@@ -1,5 +1,5 @@
 import logger from '../utils/logger.js';
-import { rolesConfig } from '../config/configLoader.js';
+import { rolesConfig, channelsConfig } from '../config/configLoader.js';
 import { fetchUserPrimaryGuild } from '../lib/discordProfileApi.js';
 import { logTagSync } from '../utils/botLogger.js';
 import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from '../repositories/tagRepo.js';
@@ -136,11 +136,228 @@ export async function mirrorSingleUser(client, userId, hasTagNow) {
   }
 }
 
-export default {
-  getLiveTagSet,
-  getLiveTagCount,
-  syncTagRolesToMainGuild,
-  mirrorSingleUser
-};
+// Verbose toggles
+const VERBOSE = (process.env.TAG_LOG_VERBOSITY || '').toLowerCase() === 'debug';
+const DEBUG_RAW = (process.env.TAG_DEBUG_RAW || '0') === '1';
+const UPDATE_STATS_ON_CHANGE = (process.env.TAG_UPDATE_STATS_ON_CHANGE || '0') === '1';
+
+function logv(msg, extra) { if (VERBOSE) logger.debug({ ...extra }, `[TagService] ${msg}`); }
+
+async function maybeUpdateStats(client) {
+  if (!UPDATE_STATS_ON_CHANGE) return;
+  try {
+    const statsChannelId = channelsConfig()?.statsChannelId;
+    const guildId = MAIN_GUILD_ID;
+    if (!guildId || !statsChannelId) return;
+    const { updateStats } = await import('../features/stats/statsUpdater.js');
+    await updateStats(client, guildId, statsChannelId);
+  } catch (err) {
+    logger.warn({ err }, '[TagService] failed to update stats after role change');
+  }
+}
+
+export class TagService {
+  constructor(client) {
+    this.client = client;
+    const r = rolesConfig?.() || {};
+    this.MAIN_GUILD_ID = MAIN_GUILD_ID || process.env.GUILD_ID || r.guildId || null;
+    this.TAG_GUILD_ID  = TAG_GUILD_ID  || process.env.TAG_GUILD_ID || r.cnsTagGuildId || r.tagGuildId || null;
+    this.TAG_ROLE_ID   = TAG_GUILD_ROLE_ID || process.env.TAG_ROLE_ID || r.cnsTagRoleId || r.tagRoleId || null;
+    this.DEST_ROLE_ID  = TAG_ROLE_ID   || process.env.DEST_ROLE_ID || r.cnsOfficialRole || r.destRoleId || null;
+
+    logger.info({
+      MAIN_GUILD_ID: this.MAIN_GUILD_ID,
+      TAG_GUILD_ID : this.TAG_GUILD_ID,
+      TAG_ROLE_ID  : this.TAG_ROLE_ID,
+      DEST_ROLE_ID : this.DEST_ROLE_ID,
+      VERBOSE,
+      DEBUG_RAW,
+      UPDATE_STATS_ON_CHANGE
+    }, '[TagService] resolved IDs/config');
+  }
+
+  async start() {
+    if (!this.MAIN_GUILD_ID || !this.DEST_ROLE_ID) {
+      logger.error('[TagService] Missing MAIN_GUILD_ID/DEST_ROLE_ID. Listener not started.');
+      return;
+    }
+
+    // Auto-fallback: if the configured tag guild is not accessible, use MAIN as source in this environment
+    try {
+      if (this.TAG_GUILD_ID) {
+        const tagGuild = await this._fetchGuild(this.TAG_GUILD_ID);
+        if (!tagGuild) {
+          logger.warn({ configured: this.TAG_GUILD_ID, fallback: this.MAIN_GUILD_ID }, '[TagService] Not in TAG_GUILD; falling back to MAIN_GUILD as tag source');
+          this.TAG_GUILD_ID = this.MAIN_GUILD_ID;
+        }
+      } else {
+        this.TAG_GUILD_ID = this.MAIN_GUILD_ID;
+        logger.warn('[TagService] TAG_GUILD_ID not set; using MAIN_GUILD as tag source');
+      }
+    } catch (e) {
+      logger.warn({ err: e }, '[TagService] tag guild probe failed; using MAIN_GUILD as tag source');
+      this.TAG_GUILD_ID = this.MAIN_GUILD_ID;
+    }
+    this.client.on('guildMemberUpdate', (o, n) => this._onGuildMemberUpdate(o, n));
+    this.client.on('guildMemberAdd',    (m)    => this._onGuildMemberAdd(m));
+    this.client.on('guildMemberRemove', (m)    => this._onGuildMemberRemove(m));
+    if (DEBUG_RAW) {
+      this.client.on('raw', (pkt) => {
+        if (pkt?.t === 'GUILD_MEMBER_UPDATE') {
+          logger.info({ guild_id: pkt.d?.guild_id, user_id: pkt.d?.user?.id }, '[TagService] RAW GUILD_MEMBER_UPDATE');
+        }
+      });
+    }
+    logger.info('[TagService] listeners registered');
+  }
+
+  async _fetchGuild(id) {
+    try { return await this.client.guilds.fetch(id); }
+    catch (err) { logger.error({ err, id }, '[TagService] cannot fetch guild'); return null; }
+  }
+  async _fetchMember(guildId, userId) {
+    const g = await this._fetchGuild(guildId);
+    if (!g) return null;
+    try { return await g.members.fetch(userId); }
+    catch (err) { logv('fetch member failed', { guildId, userId, err: err?.message }); return null; }
+  }
+  async _fetchAllMembers(guildId) {
+    const g = await this._fetchGuild(guildId);
+    if (!g) return null;
+    try { return await g.members.fetch(); }
+    catch (err) { logger.error({ err, guildId }, '[TagService] fetch all members failed'); return null; }
+  }
+
+  async _addRoleInMain(userId, reason) {
+    const m = await this._fetchMember(this.MAIN_GUILD_ID, userId);
+    if (!m) { logv('skip add (user not in MAIN)', { userId }); return false; }
+    try {
+      await m.roles.add(this.DEST_ROLE_ID, reason);
+      logger.info({ userId, reason }, '[TagService] added role in MAIN');
+      await maybeUpdateStats(this.client);
+      return true;
+    } catch (err) {
+      logger.error({ err, userId }, '[TagService] add role failed');
+      return false;
+    }
+  }
+  async _removeRoleInMain(userId, reason) {
+    const m = await this._fetchMember(this.MAIN_GUILD_ID, userId);
+    if (!m) { logv('skip remove (user not in MAIN)', { userId }); return false; }
+    try {
+      await m.roles.remove(this.DEST_ROLE_ID, reason);
+      logger.info({ userId, reason }, '[TagService] removed role in MAIN');
+      await maybeUpdateStats(this.client);
+      return true;
+    } catch (err) {
+      logger.error({ err, userId }, '[TagService] remove role failed');
+      return false;
+    }
+  }
+
+  // Idempotent enforcement: reflect tag state 1:1 to MAIN guild role
+  async _ensureMainRole(userId, shouldHave) {
+    const freshMain = await this._fetchMember(this.MAIN_GUILD_ID, userId);
+    if (!freshMain) { logger.debug({ userId }, '[TagService] ensure: not in MAIN guild'); return false; }
+    const hasRole = !!freshMain.roles.cache.has(this.DEST_ROLE_ID);
+
+    if (shouldHave && !hasRole) {
+      return this._addRoleInMain(userId, 'tag mirror (ensure)');
+    }
+    if (!shouldHave && hasRole) {
+      return this._removeRoleInMain(userId, 'tag mirror (ensure)');
+    }
+
+    logger.debug({ userId, shouldHave, hasRole }, '[TagService] ensure: no change');
+    return false;
+  }
+
+  async _onGuildMemberUpdate(_oldM, newM) {
+    try {
+      if (!newM?.guild) return;
+      logger.info({ guildId: newM.guild.id, userId: newM.id }, '[TagService] guildMemberUpdate received');
+      if (!this.TAG_GUILD_ID) { logv('no TAG_GUILD_ID configured; ignore'); return; }
+      if (newM.guild.id !== this.TAG_GUILD_ID) { logv('update from non-TAG guild, ignoring', { guildId: newM.guild.id }); return; }
+      const freshTag = await this._fetchMember(this.TAG_GUILD_ID, newM.id);
+      if (!freshTag) { logger.warn({ userId: newM.id }, '[TagService] cannot refetch member in TAG guild'); return; }
+      const hasTagNow = freshTag.roles.cache.has(this.TAG_ROLE_ID);
+      logger.info({ userId: newM.id, hasTagNow }, '[TagService] tag state (TAG guild) -> enforce in MAIN');
+      await this._ensureMainRole(newM.id, hasTagNow);
+    } catch (err) {
+      logger.error({ err }, '[TagService] onGuildMemberUpdate error');
+    }
+  }
+  async _onGuildMemberAdd(member) {
+    try {
+      if (member.guild.id !== this.TAG_GUILD_ID) return;
+      logger.info({ userId: member.id }, '[TagService] guildMemberAdd (TAG guild)');
+      const fresh = await this._fetchMember(this.TAG_GUILD_ID, member.id);
+      const has = !!fresh?.roles.cache.has(this.TAG_ROLE_ID);
+      await this._ensureMainRole(member.id, has);
+    } catch (err) {
+      logger.error({ err }, '[TagService] onGuildMemberAdd error');
+    }
+  }
+  async _onGuildMemberRemove(member) {
+    try {
+      if (member.guild.id !== this.TAG_GUILD_ID) return;
+      logger.info({ userId: member.id }, '[TagService] guildMemberRemove (TAG guild)');
+      await this._ensureMainRole(member.id, false);
+    } catch (err) {
+      logger.error({ err }, '[TagService] onGuildMemberRemove error');
+    }
+  }
+
+  async getLiveTagSet() {
+    const tagMembers = await this._fetchAllMembers(this.TAG_GUILD_ID);
+    const set = new Set();
+    if (!tagMembers) return set;
+    for (const [, m] of tagMembers) if (m.roles.cache.has(this.TAG_ROLE_ID)) set.add(m.id);
+    logv('getLiveTagSet result', { count: set.size });
+    return set;
+  }
+  async getLiveTagCount() {
+    const set = await this.getLiveTagSet();
+    return set.size;
+  }
+  async syncOne(userId) {
+    const tagM  = await this._fetchMember(this.TAG_GUILD_ID,  userId);
+    const mainM = await this._fetchMember(this.MAIN_GUILD_ID, userId);
+    if (!mainM) { logger.warn({ userId }, '[TagService] syncOne: user not in MAIN guild'); return false; }
+    const hasTag  = !!tagM?.roles.cache.has(this.TAG_ROLE_ID);
+    const hasRole = mainM.roles.cache.has(this.DEST_ROLE_ID);
+    logger.info({ userId, hasTag, hasRole }, '[TagService] syncOne state');
+    if (hasTag && !hasRole) return this._addRoleInMain(userId, 'tag-sync (user)');
+    if (!hasTag && hasRole) return this._removeRoleInMain(userId, 'tag-sync (user)');
+    return false;
+  }
+  async bulkSync() {
+    const res = { checked: 0, toAdd: 0, toRemove: 0, added: 0, removed: 0, skipped: 0 };
+    const mainMembers = await this._fetchAllMembers(this.MAIN_GUILD_ID);
+    const tagSet = await this.getLiveTagSet();
+    if (!mainMembers) return res;
+    for (const [, m] of mainMembers) {
+      res.checked++;
+      const hasTag = tagSet.has(m.id);
+      const hasRole = m.roles.cache.has(this.DEST_ROLE_ID);
+      if (hasTag && !hasRole) {
+        res.toAdd++;
+        try { await m.roles.add(this.DEST_ROLE_ID, 'tag-sync (bulk)'); res.added++; }
+        catch (err) { logger.error({ err, userId: m.id }, '[TagService] bulk add failed'); }
+      } else if (!hasTag && hasRole) {
+        res.toRemove++;
+        try { await m.roles.remove(this.DEST_ROLE_ID, 'tag-sync (bulk)'); res.removed++; }
+        catch (err) { logger.error({ err, userId: m.id }, '[TagService] bulk remove failed'); }
+      } else {
+        res.skipped++;
+      }
+    }
+    logger.info({ ...res }, '[TagService] bulk sync summary');
+    await maybeUpdateStats(this.client);
+    return res;
+  }
+}
+
+export default TagService;
 
 
