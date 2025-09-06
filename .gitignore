@@ -14,7 +14,7 @@ yarn-error.log*
 .env.prod
 
 # Database
-src/database/bot.db 
+
 
 # MacOS
 .DS_Store
@@ -67,4 +67,14 @@ coverage/
 config.test/ 
 
 # CNS Bot database
-src/database/bot.db 
+
+# ignore live sqlite db
+src/database/*.db
+src/database/*.db-wal
+src/database/*.db-shm
+
+# SQLite (local)
+*.db
+*.db-wal
+*.db-shm
+src/database/*.db*
