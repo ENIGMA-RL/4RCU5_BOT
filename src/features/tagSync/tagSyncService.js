@@ -449,6 +449,33 @@ export async function mirrorFromSourceRole(client) {
   return { count: srcIds.size, updated: added, removed };
 }
 
+// Mirror for a single user id from source guild role → destination official role
+export async function mirrorUserFromSourceRole(client, userId) {
+  const roles = rolesConfig();
+  const SRC_GUILD_ID = roles.tagSourceGuildId ?? roles.tagGuildId;
+  const SRC_ROLE_ID  = roles.tagSourceRoleId ?? roles.cnsOfficialRole;
+  const DST_GUILD_ID = process.env.GUILD_ID;
+  const DST_ROLE_ID  = roles.cnsOfficialRole;
+
+  const srcGuild = await client.guilds.fetch(SRC_GUILD_ID).catch(() => null);
+  const dstGuild = await client.guilds.fetch(DST_GUILD_ID).catch(() => null);
+  if (!srcGuild || !dstGuild) return { added: 0, removed: 0 };
+
+  try { await srcGuild.members.fetch({ user: userId }); } catch {}
+  try { await dstGuild.members.fetch({ user: userId }); } catch {}
+
+  const srcMember = srcGuild.members.cache.get(userId);
+  const dstMember = dstGuild.members.cache.get(userId);
+  if (!dstMember) return { added: 0, removed: 0 };
+
+  const shouldHave = !!srcMember?.roles.cache.has(SRC_ROLE_ID);
+  const hasDst = dstMember.roles.cache.has(DST_ROLE_ID);
+
+  if (shouldHave && !hasDst) { try { await dstMember.roles.add(DST_ROLE_ID, 'mirror tag from source guild'); } catch {} return { added: 1, removed: 0 }; }
+  if (!shouldHave && hasDst) { try { await dstMember.roles.remove(DST_ROLE_ID, 'mirror tag removed in source guild'); } catch {} return { added: 0, removed: 1 }; }
+  return { added: 0, removed: 0 };
+}
+
 /**
  * Sync existing tag holders on bot startup
  * This ensures users who already have the CNS tag get timestamps recorded
