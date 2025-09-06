@@ -13,8 +13,8 @@ export async function botTokenHasTag({ userId, client }) {
   if (!res.ok) return { ok: false, isUsingTag: false };
   const userData = await res.json();
   const tagData = userData.primary_guild;
-  const tagGuildId = rolesConfig().tagGuildId;
-  const isUsingTag = Boolean(tagData && tagData.identity_enabled && tagData.identity_guild_id === tagGuildId);
+  const expectedGuildId = process.env.GUILD_ID || rolesConfig().tagGuildId;
+  const isUsingTag = Boolean(tagData && tagData.identity_enabled && tagData.identity_guild_id === expectedGuildId);
   return { ok: true, isUsingTag, tagData, userData };
 }
 
@@ -30,8 +30,8 @@ export async function oauthHasTag({ accessToken }) {
   if (!res.ok) return { ok: false, isUsingTag: false };
   const userData = await res.json();
   const tagData = userData.primary_guild;
-  const tagGuildId = rolesConfig().tagGuildId;
-  const isUsingTag = Boolean(tagData && tagData.identity_enabled && tagData.identity_guild_id === tagGuildId);
+  const expectedGuildId = process.env.GUILD_ID || rolesConfig().tagGuildId;
+  const isUsingTag = Boolean(tagData && tagData.identity_enabled && tagData.identity_guild_id === expectedGuildId);
   return { ok: true, isUsingTag, tagData, userData };
 }
 

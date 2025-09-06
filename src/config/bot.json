@@ -8,8 +8,7 @@
     "rotate_ms": 300000,
     "default": "VAIIYA",
     "activities": [
-      { "name": "VAIIYA", "type": 3 },
-      { "name": "/help", "type": 3 }
+      { "name": "VAIIYA", "type": 3 }
     ]
   }
 } 
