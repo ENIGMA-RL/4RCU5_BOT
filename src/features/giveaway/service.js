@@ -108,8 +108,10 @@ class GiveawayService {
       gv.status === 'published' ? `Congrats: <@${gv.published_winner_user_id}>` :
       gv.status === 'drawn_unpublished' ? 'Pending Approval' : 't.b.d.';
 
+    const statusText = gv.status === 'open' ? 'Open' : gv.status === 'closed' ? 'Closed' : null;
     const body = [
       `**Signups Close:** <t:${endSec}:f>  **Entries:** ${entries}`,
+      ...(statusText ? [`**Status:** ${statusText}`] : []),
       divider,
       '**Eligibility:**',
       '• CNS Member+ (Lvl 3+)',
@@ -158,7 +160,11 @@ class GiveawayService {
   async openSignups({ giveawayId, client }) {
     const gv = getGiveawayById(giveawayId);
     if (!gv) throw new Error('not found');
-    if (gv.status === 'open') return;
+    if (gv.status === 'open') {
+      // ensure buttons visible when already open
+      await this.refreshMessage(gv.channel_id, gv.message_id, gv, client);
+      return;
+    }
     if (gv.status !== 'closed') throw new Error('not closed');
     updateGiveaway(giveawayId, { status: 'open' });
     await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'open' }, client);
@@ -167,7 +173,11 @@ class GiveawayService {
   async closeSignups({ giveawayId, client }) {
     const gv = getGiveawayById(giveawayId);
     if (!gv) throw new Error('not found');
-    if (gv.status === 'closed') return;
+    if (gv.status === 'closed') {
+      // ensure buttons removed when already closed
+      await this.refreshMessage(gv.channel_id, gv.message_id, gv, client);
+      return;
+    }
     if (gv.status !== 'open') throw new Error('not open');
     updateGiveaway(giveawayId, { status: 'closed' });
     await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'closed' }, client);

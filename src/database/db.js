@@ -59,6 +59,21 @@ function initializeDatabase() {
     CREATE INDEX IF NOT EXISTS idx_users_cns_tag_unequipped ON users(cns_tag_unequipped_at);
   `);
 
+  // Whitelist table and trigger to block unintended left_server resets
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS allow_left_reset (
+      user_id TEXT PRIMARY KEY
+    );
+
+    CREATE TRIGGER IF NOT EXISTS users_block_left_reset
+    BEFORE UPDATE OF left_server ON users
+    WHEN OLD.left_server = 1 AND NEW.left_server = 0
+      AND NOT EXISTS (SELECT 1 FROM allow_left_reset WHERE user_id = NEW.user_id)
+    BEGIN
+      SELECT RAISE(ABORT, 'blocked reset of left_server');
+    END;
+  `);
+
   // Birthdays table for birthday tracking
   db.exec(`
     CREATE TABLE IF NOT EXISTS birthdays (

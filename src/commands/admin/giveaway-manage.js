@@ -62,18 +62,18 @@ export async function execute(interaction) {
       `**Entries:** ${entries}`
     ].join('\n'));
 
-  // 3) Knoppen (context-gevoelig)
+  // 3) Knoppen (altijd actief; service valideert of voert no-op uit)
   const row1 = new ActionRowBuilder().addComponents(
     new ButtonBuilder()
       .setCustomId(`gw:mgr:open:${id}`)
       .setLabel('Open')
       .setStyle(ButtonStyle.Success)
-      .setDisabled(!(status === 'closed')),
+      .setDisabled(false),
     new ButtonBuilder()
       .setCustomId(`gw:mgr:close:${id}`)
       .setLabel('Close')
       .setStyle(ButtonStyle.Danger)
-      .setDisabled(!(status === 'open')),
+      .setDisabled(false),
     new ButtonBuilder()
       .setCustomId(`gw:mgr:delete:${id}`)
       .setLabel('Delete')
@@ -86,17 +86,17 @@ export async function execute(interaction) {
       .setCustomId(`gw:mgr:draw:${id}`)
       .setLabel('Draw')
       .setStyle(ButtonStyle.Primary)
-      .setDisabled(!(status === 'closed')),
+      .setDisabled(false),
     new ButtonBuilder()
       .setCustomId(`gw:mgr:reroll:${id}`)
       .setLabel('Reroll')
       .setStyle(ButtonStyle.Secondary)
-      .setDisabled(!(status === 'drawn_unpublished')),
+      .setDisabled(false),
     new ButtonBuilder()
       .setCustomId(`gw:mgr:publish:${id}`)
       .setLabel('Publish')
       .setStyle(ButtonStyle.Success)
-      .setDisabled(!(status === 'drawn_unpublished'))
+      .setDisabled(false)
   );
 
   return interaction.reply({
