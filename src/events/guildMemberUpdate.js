@@ -2,16 +2,17 @@ import { syncUserTagRole } from '../features/tagSync/tagSyncService.js';
 import { refreshStaffEmbed } from '../features/staff/staffEmbed.js';
 import { staffConfig } from '../config/configLoader.js';
 import { giveawayConfig } from '../config/configLoader.js';
-import { recordRoleFirstSeen } from '../database/db.js';
+import { recordRoleFirstSeen } from '../repositories/tagRepo.js';
 import { rolesConfig } from '../config/configLoader.js';
-import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from '../database/db.js';
+import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from '../repositories/tagRepo.js';
 import { logTagSync } from '../utils/botLogger.js';
+import logger from '../utils/logger.js';
 
 export const name = 'guildMemberUpdate';
 export const once = false;
 
 export async function execute(oldMember, newMember) {
-  console.log(`🔧 [DEBUG] guildMemberUpdate event for user ${newMember.user.tag} (${newMember.id})`);
+  logger.trace(`guildMemberUpdate event for user ${newMember.user.tag} (${newMember.id})`);
   
   // Track role tenure for giveaway eligibility
   const cfg = giveawayConfig();
@@ -64,14 +65,14 @@ export async function execute(oldMember, newMember) {
       setTimeout(async () => {
         try {
           await refreshStaffEmbed(newMember.client);
-          // console.log(`✅ Staff embed updated after role change for ${newMember.user.tag}`);
+          // intentionally quiet
         } catch (error) {
-          console.error('Error updating staff embed after role change:', error);
+          logger.error({ err: error }, 'Error updating staff embed after role change');
         }
       }, 2000); // 2 second delay
     }
     
   } catch (error) {
-    console.error('Error in guildMemberUpdate event:', error);
+    logger.error({ err: error }, 'Error in guildMemberUpdate event');
   }
 }; 

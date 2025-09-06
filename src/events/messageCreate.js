@@ -1,7 +1,9 @@
 import { handleMessageXP } from '../features/leveling/levelingSystem.js';
 import { rolesConfig } from '../config/configLoader.js';
 import { logInviteBlock } from '../utils/botLogger.js';
+import logger from '../utils/logger.js';
 import { cacheMessage } from '../utils/messageCache.js';
+import { isAdmin } from '../utils/permissions.js';
 
 export const name = 'messageCreate';
 export const execute = async (message) => {
@@ -15,9 +17,8 @@ export const execute = async (message) => {
   const inviteRegex = /discord\.(gg|io|me|li|com\/invite)\/[a-zA-Z0-9-]+/i;
   if (inviteRegex.test(message.content)) {
     // Exempt admin roles
-    const adminRoles = rolesConfig().adminRoles;
     const member = message.member;
-    if (!member || !member.roles.cache.some(role => adminRoles.includes(role.id))) {
+    if (!member || !isAdmin(member)) {
       try {
         await message.delete();
         // Warn in channel and tag the user
@@ -30,7 +31,7 @@ export const execute = async (message) => {
         // Log the action
         await logInviteBlock(message.client, message.author.id, message.author.tag, message.channel.name);
       } catch (err) {
-        console.error('Error deleting invite link message or sending warning:', err);
+        logger.error({ err }, 'Error deleting invite link message or sending warning');
       }
       return;
     }
@@ -40,6 +41,6 @@ export const execute = async (message) => {
     // Award XP for message
     await handleMessageXP(message.member);
   } catch (error) {
-    console.error('Error handling message XP:', error);
+    logger.error({ err: error }, 'Error handling message XP');
   }
 }; 

@@ -1,6 +1,8 @@
 import { handleVoiceXP } from '../features/leveling/levelingSystem.js';
+import { onJoin, onLeave, onSwitch } from '../features/leveling/voiceSessionService.js';
 import { PermissionsBitField } from 'discord.js';
-import { channelsConfig, rolesConfig } from '../config/configLoader.js';
+import { channelsConfig, rolesConfig, getEnvironment } from '../config/configLoader.js';
+import logger from '../utils/logger.js';
 
 // Map of level roles in order from lowest to highest
 const LEVEL_ROLES_ORDER = [
@@ -41,8 +43,7 @@ export const once = false;
 const createdChannels = new Map();
 // Store cooldowns to prevent multiple channel creation
 const userCooldowns = new Map();
-// Store per-user voice join timestamps and XP timers
-const voiceSessionMap = new Map(); // userId -> { joinTimestamp, lastAwardedMinute, eligibleMs, lastTick, interval }
+// Voice session state is managed in voiceSessionService
 
 export const execute = async (oldState, newState) => {
   // Ignore bot voice states
@@ -53,18 +54,18 @@ export const execute = async (oldState, newState) => {
     // User left a channel - check if it's one of our created channels
     const leftChannel = oldState.channel;
     if (leftChannel && createdChannels.has(leftChannel.id)) {
-      console.log(`[JoinToCreate] User left created channel ${leftChannel.name}. Deleting instantly...`);
+      logger.debug(`[JoinToCreate] User left created channel ${leftChannel.name}. Deleting instantly...`);
       try {
         const freshChannel = await leftChannel.fetch();
         if (freshChannel.members.size === 0) {
           await leftChannel.delete('Temporary Join to Create channel cleanup');
           createdChannels.delete(leftChannel.id);
-          console.log(`[JoinToCreate] Successfully deleted empty channel ${leftChannel.name}`);
+          logger.debug(`[JoinToCreate] Successfully deleted empty channel ${leftChannel.name}`);
         } else {
-          console.log(`[JoinToCreate] Channel ${leftChannel.name} is not empty (${freshChannel.members.size} members). Keeping it.`);
+          logger.debug(`[JoinToCreate] Channel ${leftChannel.name} is not empty (${freshChannel.members.size} members). Keeping it.`);
         }
       } catch (err) {
-        console.error(`[JoinToCreate] Error checking/deleting empty channel:`, err);
+        logger.error({ err }, '[JoinToCreate] Error checking/deleting empty channel');
         createdChannels.delete(leftChannel.id);
       }
     }
@@ -75,7 +76,7 @@ export const execute = async (oldState, newState) => {
     const joinedChannel = newState.channel;
     const existingTimer = createdChannels.get(newState.channelId);
     if (existingTimer) {
-      console.log(`[JoinToCreate] User joined created channel ${joinedChannel.name}. Cancelling deletion timer.`);
+      logger.debug(`[JoinToCreate] User joined created channel ${joinedChannel.name}. Cancelling deletion timer.`);
       clearTimeout(existingTimer);
       createdChannels.set(newState.channelId, null);
     }
@@ -90,14 +91,16 @@ export const execute = async (oldState, newState) => {
     const guild = newState.guild;
     const userId = member.id;
 
-    // CNS Rookie level or higher check
-    if (!hasRequiredLevel(member, 'cnsRookie')) {
+    // Require CNS Rookie level OR the CNS Official tag role
+    const hasCnsTagRole = member.roles.cache.has(rolesConfig().cnsOfficialRole);
+    const isDevEnv = getEnvironment() === 'development';
+    if (!isDevEnv && !hasRequiredLevel(member, 'cnsRookie') && !hasCnsTagRole) {
       try {
-        await member.send('❌ You need to reach the **CNS Rookie** level or higher to create a voice channel.');
+        await member.send('❌ You need the **CNS Rookie** level (or the **CNS Official** tag role) to create a voice channel.');
       } catch (e) {
         // Ignore DM errors
       }
-      console.log(`[JoinToCreate] ${member.user.tag} tried to create a channel but lacks CNS Rookie level or higher.`);
+      logger.debug(`[JoinToCreate] ${member.user.tag} lacks required level and CNS tag role.`);
       return;
     }
 
@@ -105,11 +108,11 @@ export const execute = async (oldState, newState) => {
     const now = Date.now();
     const cooldownTime = userCooldowns.get(userId);
     if (cooldownTime && (now - cooldownTime) < 1000) {
-      console.log(`[JoinToCreate] ${member.user.tag} is on cooldown. Skipping channel creation.`);
+      logger.debug(`[JoinToCreate] ${member.user.tag} is on cooldown. Skipping channel creation.`);
       return;
     }
 
-    console.log(`[JoinToCreate] ${member.user.tag} joined the join-to-create channel. Waiting for stable connection...`);
+    logger.debug(`[JoinToCreate] ${member.user.tag} joined the join-to-create channel. Waiting for stable connection...`);
 
     // Set cooldown
     userCooldowns.set(userId, now);
@@ -127,16 +130,17 @@ export const execute = async (oldState, newState) => {
         stableTicks = 0;
       }
 
-      // Wait for 2 stable ticks in a row before proceeding
-      if (stableTicks >= 2 || tries > 30) {
+      // Wait for at least 1 stable tick (more permissive), or timeout after 8s
+      if (stableTicks >= 1 || tries > 80) {
         clearInterval(interval);
 
-        if (stableTicks < 2) {
-          console.log(`[JoinToCreate] ${member.user.tag} never stabilized. Aborting.`);
+        if (stableTicks < 1) {
+          logger.debug(`[JoinToCreate] ${member.user.tag} never stabilized (tries=${tries}). Aborting.`);
+          userCooldowns.delete(userId);
           return;
         }
 
-        console.log(`[JoinToCreate] ${member.user.tag} is voice-stable! Creating channel and moving...`);
+        logger.debug(`[JoinToCreate] ${member.user.tag} is voice-stable! Creating channel and moving...`);
 
         try {
           // Create the channel with just the username (no icon)
@@ -147,14 +151,42 @@ export const execute = async (oldState, newState) => {
             permissionOverwrites: [
               {
                 id: guild.id,
-                allow: [PermissionsBitField.Flags.ViewChannel, PermissionsBitField.Flags.Connect, PermissionsBitField.Flags.Speak],
+                allow: [
+                  PermissionsBitField.Flags.ViewChannel,
+                  PermissionsBitField.Flags.Connect,
+                  PermissionsBitField.Flags.Speak,
+                  PermissionsBitField.Flags.SendMessages,
+                  PermissionsBitField.Flags.UseApplicationCommands
+                ],
+              },
+              {
+                id: guild.members.me.id,
+                allow: [
+                  PermissionsBitField.Flags.ManageChannels,
+                  PermissionsBitField.Flags.ViewChannel,
+                  PermissionsBitField.Flags.Connect,
+                  PermissionsBitField.Flags.UseApplicationCommands,
+                  PermissionsBitField.Flags.SendMessages
+                ],
               },
               {
                 id: member.id,
-                allow: [PermissionsBitField.Flags.ManageChannels, PermissionsBitField.Flags.MuteMembers, PermissionsBitField.Flags.DeafenMembers],
+                allow: [
+                  PermissionsBitField.Flags.ManageChannels,
+                  PermissionsBitField.Flags.ViewChannel,
+                  PermissionsBitField.Flags.MuteMembers,
+                  PermissionsBitField.Flags.DeafenMembers,
+                  PermissionsBitField.Flags.MoveMembers,
+                  PermissionsBitField.Flags.Connect,
+                  PermissionsBitField.Flags.UseApplicationCommands,
+                  PermissionsBitField.Flags.SendMessages
+                ],
               },
             ],
           });
+
+          // Mark channel owner for downstream owner checks
+          try { voiceRepoAdapter.setOwner(newChannel.id, member.id); } catch {}
 
           createdChannels.set(newChannel.id, null);
 
@@ -164,27 +196,27 @@ export const execute = async (oldState, newState) => {
             const freshMember = await guild.members.fetch(member.id);
             if (freshMember.voice.channelId === channelsConfig().joinToCreateChannelId) {
               await freshMember.voice.setChannel(newChannel);
-              console.log(`[JoinToCreate] SUCCESS! Moved ${member.user.tag} to their new channel!`);
+              logger.debug(`[JoinToCreate] SUCCESS! Moved ${member.user.tag} to their new channel!`);
             } else {
-              console.warn(`[JoinToCreate] ${member.user.tag} is no longer in the join-to-create channel. Not moving.`);
+              logger.warn(`[JoinToCreate] ${member.user.tag} is no longer in the join-to-create channel. Not moving.`);
               // Instantly delete the channel if it's empty
               try {
                 const fetchedChannel = await guild.channels.fetch(newChannel.id);
                 if (fetchedChannel && fetchedChannel.members.size === 0) {
                   await fetchedChannel.delete('User left before move');
                   createdChannels.delete(newChannel.id);
-                  console.log(`[JoinToCreate] Deleted unused channel ${newChannel.name}`);
+                  logger.debug(`[JoinToCreate] Deleted unused channel ${newChannel.name}`);
                 }
               } catch (err) {
-                console.error(`[JoinToCreate] Error deleting unused channel:`, err);
+                logger.error({ err }, '[JoinToCreate] Error deleting unused channel');
               }
             }
           } catch (moveError) {
-            console.error(`[JoinToCreate] Move failed: ${moveError.message}`);
-            console.log(`[JoinToCreate] User will need to join manually: ${newChannel.name}`);
+            logger.error({ err: moveError }, `[JoinToCreate] Move failed`);
+            logger.debug(`[JoinToCreate] User will need to join manually: ${newChannel.name}`);
           }
         } catch (err) {
-          console.error(`[JoinToCreate] Error creating channel:`, err);
+          logger.error({ err }, '[JoinToCreate] Error creating channel');
           userCooldowns.delete(userId);
         }
       }
@@ -194,128 +226,19 @@ export const execute = async (oldState, newState) => {
   try {
     // If user joined a voice channel
     if (!oldState.channelId && newState.channelId) {
-      console.log(`🎤 ${newState.member.user.tag} joined voice channel: ${newState.channel ? newState.channel.name : 'Unknown Channel'}`);
-      // Start tracking join time and set up interval for periodic XP
-      const userId = newState.member.id;
-      const now = Date.now();
-      // If already tracking, clear previous interval
-      if (voiceSessionMap.has(userId)) {
-        clearInterval(voiceSessionMap.get(userId).interval);
-      }
-      // Set up interval to accrue eligible (not deafened) time and award XP per full minute
-      const interval = setInterval(async () => {
-        const session = voiceSessionMap.get(userId);
-        if (!session) return;
-        const nowTick = Date.now();
-        const delta = nowTick - session.lastTick;
-        session.lastTick = nowTick;
-        // Fetch fresh member state to check deafened status
-        let freshMember = null;
-        try { freshMember = await newState.guild.members.fetch(userId); } catch {}
-        const isDeaf = Boolean(freshMember?.voice?.selfDeaf || freshMember?.voice?.serverDeaf);
-        if (!isDeaf) {
-          session.eligibleMs += delta;
-        }
-        const eligibleMinutes = Math.floor(session.eligibleMs / 60000);
-        if (eligibleMinutes > session.lastAwardedMinute) {
-          const toAward = eligibleMinutes - session.lastAwardedMinute;
-          for (let i = 0; i < toAward; i++) {
-            await handleVoiceXP(freshMember || newState.member);
-          }
-          session.lastAwardedMinute = eligibleMinutes;
-        }
-      }, 15000); // check every 15 seconds
-      voiceSessionMap.set(userId, {
-        joinTimestamp: now,
-        lastAwardedMinute: 0,
-        eligibleMs: 0,
-        lastTick: now,
-        interval
-      });
+      logger.debug(`🎤 ${newState.member.user.tag} joined voice channel: ${newState.channel ? newState.channel.name : 'Unknown Channel'}`);
+      onJoin(newState.member);
     }
     // If user left a voice channel
     if (oldState.channelId && !newState.channelId) {
-      console.log(`👋 ${oldState.member.user.tag} left voice channel: ${oldState.channel ? oldState.channel.name : 'Unknown Channel'}`);
-      // Finalize eligible time and award any remaining full minutes (skip if deafened at the end)
-      const userId = oldState.member.id;
-      const session = voiceSessionMap.get(userId);
-      if (session) {
-        const nowTick = Date.now();
-        const delta = nowTick - session.lastTick;
-        session.lastTick = nowTick;
-        const isDeaf = Boolean(oldState.member?.voice?.selfDeaf || oldState.member?.voice?.serverDeaf);
-        if (!isDeaf) {
-          session.eligibleMs += delta;
-        }
-        const eligibleMinutes = Math.floor(session.eligibleMs / 60000);
-        if (eligibleMinutes > session.lastAwardedMinute) {
-          const toAward = eligibleMinutes - session.lastAwardedMinute;
-          for (let i = 0; i < toAward; i++) {
-            await handleVoiceXP(oldState.member);
-          }
-          session.lastAwardedMinute = eligibleMinutes;
-        }
-        clearInterval(session.interval);
-        voiceSessionMap.delete(userId);
-      }
+      logger.debug(`👋 ${oldState.member.user.tag} left voice channel: ${oldState.channel ? oldState.channel.name : 'Unknown Channel'}`);
+      onLeave(oldState.member);
     }
     // If user switched channels
     if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-      // Treat as leave + join
-      // Finalize eligible time on old channel
-      const userId = oldState.member.id;
-      const session = voiceSessionMap.get(userId);
-      if (session) {
-        const nowTick = Date.now();
-        const delta = nowTick - session.lastTick;
-        session.lastTick = nowTick;
-        const isDeaf = Boolean(oldState.member?.voice?.selfDeaf || oldState.member?.voice?.serverDeaf);
-        if (!isDeaf) {
-          session.eligibleMs += delta;
-        }
-        const eligibleMinutes = Math.floor(session.eligibleMs / 60000);
-        if (eligibleMinutes > session.lastAwardedMinute) {
-          const toAward = eligibleMinutes - session.lastAwardedMinute;
-          for (let i = 0; i < toAward; i++) {
-            await handleVoiceXP(oldState.member);
-          }
-          session.lastAwardedMinute = eligibleMinutes;
-        }
-        clearInterval(session.interval);
-        voiceSessionMap.delete(userId);
-      }
-      // Start new session for new channel
-      const now = Date.now();
-      const interval = setInterval(async () => {
-        const sessionNew = voiceSessionMap.get(userId);
-        if (!sessionNew) return;
-        const nowTickNew = Date.now();
-        const deltaNew = nowTickNew - sessionNew.lastTick;
-        sessionNew.lastTick = nowTickNew;
-        let freshMember = null;
-        try { freshMember = await newState.guild.members.fetch(userId); } catch {}
-        const isDeafNew = Boolean(freshMember?.voice?.selfDeaf || freshMember?.voice?.serverDeaf);
-        if (!isDeafNew) {
-          sessionNew.eligibleMs += deltaNew;
-        }
-        const eligibleMinutesNew = Math.floor(sessionNew.eligibleMs / 60000);
-        if (eligibleMinutesNew > sessionNew.lastAwardedMinute) {
-          const toAwardNew = eligibleMinutesNew - sessionNew.lastAwardedMinute;
-          for (let i = 0; i < toAwardNew; i++) {
-            await handleVoiceXP(freshMember || newState.member);
-          }
-          sessionNew.lastAwardedMinute = eligibleMinutesNew;
-        }
-      }, 15000);
-      voiceSessionMap.set(userId, {
-        joinTimestamp: now,
-        lastAwardedMinute: 0,
-        eligibleMs: 0,
-        lastTick: now,
-        interval
-      });
+      onSwitch(oldState.member, newState.member);
     }
   } catch (error) {
-    console.error('Error handling voice state update:', error);
+    logger.error({ err: error }, 'Error handling voice state update');
   }
 }; 

@@ -1,5 +1,5 @@
 import { SlashCommandBuilder } from 'discord.js';
-import { getCnsTagStatus } from '../../database/db.js';
+import { getCnsTagStatus } from '../../repositories/tagRepo.js';
 import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = new SlashCommandBuilder()

@@ -1,5 +1,5 @@
 import { EmbedBuilder, ActionRowBuilder, StringSelectMenuBuilder } from 'discord.js';
-import db from '../../database/db.js';
+import { upsertBirthday } from '../../repositories/birthdaysRepo.js';
 import { channelsConfig, rolesConfig } from '../../config/configLoader.js';
 
 // Helper function to get month name
@@ -12,7 +12,7 @@ function getMonthName(month) {
 }
 
 export const data = {
-  name: 'birthday',
+  name: 'set-birthday',
   description: 'Set your birthday to receive birthday wishes and a special role!',
   options: [
     {
@@ -74,12 +74,7 @@ export const execute = async (interaction) => {
     const username = interaction.user.tag;
 
     // Store or update the birthday in the database
-    const stmt = db.prepare(`
-      INSERT OR REPLACE INTO birthdays (user_id, guild_id, username, birth_day, birth_month, birth_year, created_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-
-    stmt.run(userId, guildId, username, day, month, year, Date.now());
+    upsertBirthday({ userId, guildId, username, day, month, year });
 
     // Create confirmation embed
     const embed = new EmbedBuilder()

@@ -1,6 +1,14 @@
 import { EmbedBuilder } from 'discord.js';
-import { calculateLevel, updateUserLevel, getTopUsers } from '../../database/db.js';
+import { updateUserLevel, getTopUsers } from '../../repositories/usersRepo.js';
 import { levelSettingsConfig } from '../../config/configLoader.js';
+
+function calculateLevel(xp, thresholds) {
+  if (!thresholds || thresholds.length === 0) return 1;
+  for (let i = thresholds.length - 1; i >= 0; i--) {
+    if (xp >= thresholds[i]) return i + 1;
+  }
+  return 1;
+}
 import { rolesConfig } from '../../config/configLoader.js';
 
 export const data = {

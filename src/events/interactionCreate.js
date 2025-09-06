@@ -1,5 +1,6 @@
 import { TicketManager } from '../features/tickets/ticketManager.js';
 import { EmbedBuilder } from 'discord.js';
+import logger from '../utils/logger.js';
 
 export const name = 'interactionCreate';
 export const execute = async (interaction) => {
@@ -8,21 +9,21 @@ export const execute = async (interaction) => {
     const command = interaction.client.commands.get(interaction.commandName);
 
     if (!command) {
-      console.error(`No command matching ${interaction.commandName} was found.`);
+      logger.error(`No command matching ${interaction.commandName} was found.`);
       return;
     }
 
     try {
       await command.execute(interaction);
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       
       // Only try to respond if the interaction hasn't been handled yet
       if (!interaction.replied && !interaction.deferred) {
         try {
           await interaction.reply({ content: 'there was an error while executing this command.', flags: 64 });
         } catch (replyError) {
-          console.error('Failed to send error reply:', replyError);
+          logger.error('Failed to send error reply:', replyError);
         }
       }
     }
@@ -34,21 +35,21 @@ export const execute = async (interaction) => {
     const command = interaction.client.commands.get(interaction.commandName);
 
     if (!command) {
-      console.error(`No context menu command matching ${interaction.commandName} was found.`);
+      logger.error(`No context menu command matching ${interaction.commandName} was found.`);
       return;
     }
 
     try {
       await command.execute(interaction);
     } catch (error) {
-      console.error(error);
+      logger.error(error);
       
       // Only try to respond if the interaction hasn't been handled yet
       if (!interaction.replied && !interaction.deferred) {
         try {
           await interaction.reply({ content: 'there was an error while executing this command.', flags: 64 });
         } catch (replyError) {
-          console.error('Failed to send error reply:', replyError);
+          logger.error('Failed to send error reply:', replyError);
         }
       }
     }
@@ -97,7 +98,7 @@ export const execute = async (interaction) => {
             result = { success: true, message: '✅ Giveaway deleted successfully', deleted: true };
           } catch (deleteError) {
             // Even if delete fails, mark as deleted to prevent further errors
-            console.error('Delete giveaway error:', deleteError);
+            logger.error('Delete giveaway error:', deleteError);
             result = { success: true, message: '✅ Giveaway deleted successfully', deleted: true };
           }
         }
@@ -121,7 +122,7 @@ export const execute = async (interaction) => {
     try {
       ticketManager = new TicketManager(interaction.client);
     } catch (error) {
-      console.error('Failed to create TicketManager:', error);
+      logger.error('Failed to create TicketManager:', error);
       await interaction.reply({ 
         content: '❌ Ticket system error. Please try again.', 
         flags: 64 
@@ -162,9 +163,9 @@ export const execute = async (interaction) => {
             });
           } catch (replyError) {
             if (replyError.code === 10003) {
-              console.log('Channel was deleted between check and reply, skipping response');
+              logger.debug('Channel was deleted between check and reply, skipping response');
             } else {
-              console.error('Failed to send success reply:', replyError);
+              logger.error({ err: replyError }, 'Failed to send success reply');
             }
           }
         } else {
@@ -175,14 +176,14 @@ export const execute = async (interaction) => {
             });
           } catch (replyError) {
             if (replyError.code === 10003) {
-              console.log('Channel was deleted between check and reply, skipping response');
+              logger.debug('Channel was deleted between check and reply, skipping response');
             } else {
-              console.error('Failed to send error reply:', replyError);
+              logger.error({ err: replyError }, 'Failed to send error reply');
             }
           }
         }
       } catch (error) {
-        console.error('Error handling create ticket button:', error);
+        logger.error({ err: error }, 'Error handling create ticket button');
         try {
           await interaction.reply({ 
             content: '❌ An error occurred while creating the ticket. Please try again.', 
@@ -190,9 +191,9 @@ export const execute = async (interaction) => {
           });
         } catch (replyError) {
           if (replyError.code === 10062) {
-            console.log('Interaction already timed out, skipping reply');
+            logger.debug('Interaction already timed out, skipping reply');
           } else {
-            console.error('Failed to send error reply:', replyError);
+            logger.error({ err: replyError }, 'Failed to send error reply');
           }
         }
       }
@@ -243,9 +244,9 @@ export const execute = async (interaction) => {
             });
           } catch (replyError) {
             if (replyError.code === 10003) {
-              console.log('Channel was deleted between check and reply, skipping response');
+              logger.debug('Channel was deleted between check and reply, skipping response');
             } else {
-              console.error('Failed to send success reply:', replyError);
+              logger.error({ err: replyError }, 'Failed to send success reply');
             }
           }
         } else {
@@ -256,14 +257,14 @@ export const execute = async (interaction) => {
             });
           } catch (replyError) {
             if (replyError.code === 10003) {
-              console.log('Channel was deleted between check and reply, skipping response');
+              logger.debug('Channel was deleted between check and reply, skipping response');
             } else {
-              console.error('Failed to send error reply:', replyError);
+              logger.error({ err: replyError }, 'Failed to send error reply');
             }
           }
         }
       } catch (error) {
-        console.error('Error handling close ticket button:', error);
+        logger.error({ err: error }, 'Error handling close ticket button');
         try {
           await interaction.reply({ 
             content: '❌ An error occurred while closing the ticket. Please try again.', 
@@ -271,9 +272,9 @@ export const execute = async (interaction) => {
           });
         } catch (replyError) {
           if (replyError.code === 10062) {
-            console.log('Interaction already timed out, skipping reply');
+            logger.debug('Interaction already timed out, skipping reply');
           } else {
-            console.error('Failed to send error reply:', replyError);
+            logger.error({ err: replyError }, 'Failed to send error reply');
           }
         }
       }
@@ -291,14 +292,14 @@ export const execute = async (interaction) => {
       await targetMsg.reply({ content: text });
       await interaction.reply({ content: '✅ message sent as reply', flags: 64 });
     } catch (e) {
-      console.error('Error in reply as bot modal:', e);
+      logger.error({ err: e }, 'Error in reply as bot modal');
       try {
         await interaction.reply({ content: '❌ could not fetch target message', flags: 64 });
       } catch (replyError) {
         if (replyError.code === 10062) {
-          console.log('Interaction already timed out, skipping reply');
+          logger.debug('Interaction already timed out, skipping reply');
         } else {
-          console.error('Failed to send error reply:', replyError);
+          logger.error({ err: replyError }, 'Failed to send error reply');
         }
       }
     }
@@ -325,7 +326,7 @@ export const execute = async (interaction) => {
         await interaction.reply({ content: '✅ message sent', flags: 64 });
       }
     } catch (e) {
-      console.error('Error in say modal:', e);
+      logger.error({ err: e }, 'Error in say modal');
       try {
         if (messageId) {
           await interaction.reply({ content: '❌ could not fetch target message', flags: 64 });
@@ -334,9 +335,9 @@ export const execute = async (interaction) => {
         }
       } catch (replyError) {
         if (replyError.code === 10062) {
-          console.log('Interaction already timed out, skipping reply');
+          logger.debug('Interaction already timed out, skipping reply');
         } else {
-          console.error('Failed to send error reply:', replyError);
+          logger.error({ err: replyError }, 'Failed to send error reply');
         }
       }
     }
@@ -348,7 +349,7 @@ export const execute = async (interaction) => {
     // This is no longer used - giveaways are created via slash commands
     await interaction.reply({
       content: '❌ this modal is no longer used. use `/giveaway` instead.',
-      ephemeral: true
+      flags: 64
     });
     return;
   }
@@ -388,7 +389,7 @@ async function updateGiveawayManagerPanel(interaction, giveawayId, result, givea
     }
 
     // Get current giveaway data from database
-    const { getGiveawayById } = await import('../database/db.js');
+    const { getGiveawayById } = await import('../repositories/giveawaysRepo.js');
     const giveaway = getGiveawayById(giveawayId);
     if (!giveaway) {
       // If giveaway doesn't exist, show error
@@ -423,7 +424,7 @@ async function updateGiveawayManagerPanel(interaction, giveawayId, result, givea
     }
 
     // Add entry count
-    const { countActiveEntries } = await import('../database/db.js');
+    const { countActiveEntries } = await import('../repositories/giveawaysRepo.js');
     const entries = countActiveEntries(giveawayId);
     statusDescription += `**Active Entries:** ${entries}\n`;
 
@@ -437,7 +438,7 @@ async function updateGiveawayManagerPanel(interaction, giveawayId, result, givea
     await interaction.editReply({ embeds: [embed] });
     
   } catch (error) {
-    console.error('Failed to update giveaway manager panel:', error);
+    logger.error('Failed to update giveaway manager panel:', error);
     // Fallback to simple message if embed update fails
     try {
       await interaction.editReply({ 
@@ -445,7 +446,7 @@ async function updateGiveawayManagerPanel(interaction, giveawayId, result, givea
         embeds: []
       });
     } catch (editError) {
-      console.error('Failed to edit reply:', editError);
+      logger.error('Failed to edit reply:', editError);
     }
   }
 }
@@ -514,7 +515,7 @@ async function handleGiveawayButton(interaction) {
     }
     
   } catch (error) {
-    console.error('Error handling giveaway button:', error);
+    logger.error('Error handling giveaway button:', error);
     
     try {
       await interaction.followUp({
@@ -523,9 +524,9 @@ async function handleGiveawayButton(interaction) {
       });
     } catch (followUpError) {
       if (followUpError.code === 10062) {
-        console.log('Interaction already timed out, skipping followUp');
+        logger.debug('Interaction already timed out, skipping followUp');
       } else {
-        console.error('Failed to send error followUp:', followUpError);
+        logger.error('Failed to send error followUp:', followUpError);
       }
     }
   }

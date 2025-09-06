@@ -1,6 +1,7 @@
 import { REST, Routes } from 'discord.js';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import logger from '../utils/logger.js';
 
 dotenv.config();
 
@@ -14,7 +15,7 @@ async function loadAllCommands() {
     for (const file of commandFiles) {
       const command = await import(`../commands/${folder}/${file}`);
       commands.push(command.data);
-      console.log(`Loaded command: ${command.data.name}`);
+      logger.debug(`Loaded command: ${command.data.name}`);
     }
   }
   
@@ -22,10 +23,10 @@ async function loadAllCommands() {
 }
 
 export const registerCommands = async (client) => {
-  console.log('Starting command registration (all commands visible for everyone)...');
+  logger.info('Starting command registration (all commands visible for everyone)...');
   try {
     const allCommands = await loadAllCommands();
-    console.log(`Loaded ${allCommands.length} total commands`);
+    logger.info(`Loaded ${allCommands.length} total commands`);
 
     // Separate ping command for global registration
     const globalCommands = allCommands.filter(cmd => cmd.name === 'ping');
@@ -38,7 +39,7 @@ export const registerCommands = async (client) => {
         Routes.applicationCommands(client.user.id),
         { body: globalCommands }
       );
-      console.log('Registered global commands: ping');
+      logger.info('Registered global commands: ping');
     }
 
     // Register all other commands per guild
@@ -48,11 +49,11 @@ export const registerCommands = async (client) => {
         Routes.applicationGuildCommands(client.user.id, guild.id),
         { body: guildCommands }
       );
-      console.log(`Registered all commands for guild ${guild.name}`);
+      logger.info(`Registered all commands for guild ${guild.name}`);
     }
 
-    console.log('Command registration completed!');
+    logger.info('Command registration completed!');
   } catch (error) {
-    console.error('Error in command registration:', error);
+    logger.error({ err: error }, 'Error in command registration');
   }
 }; 

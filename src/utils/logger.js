@@ -1,20 +1,27 @@
 import pino from 'pino';
 
-const logger = pino({
-  level: 'info',
-  transport: {
-    target: 'pino-pretty',
-    options: {
-      colorize: true
-    }
-  }
-});
+const isDevelopment = (process.env.NODE_ENV || 'production') === 'development';
+const level = process.env.LOG_LEVEL || (isDevelopment ? 'debug' : 'info');
 
-export const logToChannel = async (channel, message) => {
-  if (channel) {
-    await channel.send(message);
+let transportConfig = undefined;
+if (isDevelopment) {
+  try {
+    // Probe availability of pino-pretty at runtime; if missing, fall back silently
+    await import('pino-pretty');
+    transportConfig = {
+      target: 'pino-pretty',
+      options: { colorize: true, translateTime: 'SYS:standard' }
+    };
+  } catch {
+    // pretty not installed; continue without transport
   }
-  logger.info(message);
-};
+}
 
-export default logger; 
+const options = { level };
+if (transportConfig) {
+  options.transport = transportConfig;
+}
+
+const logger = pino(options);
+
+export default logger;

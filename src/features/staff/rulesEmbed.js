@@ -1,36 +1,37 @@
 import { EmbedBuilder } from 'discord.js';
 import { channelsConfig, rolesConfig } from '../../config/configLoader.js';
+import logger from '../../utils/logger.js';
 
 export async function updateRulesEmbed(client, guildId) {
   try {
     const channelId = channelsConfig().rulesChannelId;
-    console.log(`[RulesEmbed] Attempting to update rules embed for guildId: ${guildId}, channelId: ${channelId}`);
+    logger.debug(`[RulesEmbed] Attempting to update rules embed for guildId: ${guildId}, channelId: ${channelId}`);
     const guild = await client.guilds.fetch(guildId);
     if (!guild) {
-      console.error('[RulesEmbed] Guild not found for rules embed update.');
+      logger.error('[RulesEmbed] Guild not found for rules embed update.');
       return;
     }
-    console.log(`[RulesEmbed] Fetched guild: ${guild.name} (${guild.id})`);
+    logger.debug(`[RulesEmbed] Fetched guild: ${guild.name} (${guild.id})`);
     // Log all channel IDs in the guild
     const allChannels = await guild.channels.fetch();
     const channelIds = Array.from(allChannels.values()).map(c => `${c.name} (${c.id}) [type: ${c.type}]`);
-    console.log(`[RulesEmbed] Guild channels:`, channelIds);
+    logger.trace({ channelIds }, '[RulesEmbed] Guild channels');
     // Fetch channel globally, then check ownership
     const channel = await client.channels.fetch(channelId).catch(e => {
-      console.error(`[RulesEmbed] Error fetching channel: ${e}`);
+      logger.error({ err: e }, '[RulesEmbed] Error fetching channel');
       return null;
     });
     if (!channel) {
-      console.error(`[RulesEmbed] Rules channel not found for ID: ${channelId}`);
+      logger.error(`[RulesEmbed] Rules channel not found for ID: ${channelId}`);
       return;
     }
-    console.log(`[RulesEmbed] Fetched channel: ${channel.name} (${channel.id}), type: ${channel.type}`);
+    logger.debug(`[RulesEmbed] Fetched channel: ${channel.name} (${channel.id}), type: ${channel.type}`);
     if (!channel.isTextBased()) {
-      console.error('[RulesEmbed] Rules channel is not a text channel.');
+      logger.error('[RulesEmbed] Rules channel is not a text channel.');
       return;
     }
     if (channel.guildId !== guildId) {
-      console.error(`[RulesEmbed] Channel's guildId (${channel.guildId}) does not match expected guildId (${guildId})`);
+      logger.error(`[RulesEmbed] Channel's guildId (${channel.guildId}) does not match expected guildId (${guildId})`);
       return;
     }
 
@@ -76,12 +77,12 @@ If you need any help or assistance please tag <@&${rolesConfig().staffRole}>${as
       await channel.send({ embeds: [embed] });
     }
   } catch (error) {
-    console.error('Error in updateRulesEmbed:', error);
+    logger.error({ err: error }, 'Error in updateRulesEmbed');
     if (error.code) {
-      console.error('Error code:', error.code);
+      logger.error({ code: error.code }, 'Error code');
     }
     if (error.path) {
-      console.error('Error path:', error.path);
+      logger.error({ path: error.path }, 'Error path');
     }
   }
 }
