@@ -159,8 +159,8 @@ client.once('ready', async () => {
     }, 5 * 60 * 1000, { jitterMs: 30 * 1000, singleton: true });
 
     registerJob('tag.sync', async () => {
-      const { syncTagRolesFromGuild } = await import('./features/tagSync/tagSyncService.js');
-      await syncTagRolesFromGuild(guild, client);
+      const { syncTagRolesToMainGuild } = await import('./services/tagService.js');
+      await syncTagRolesToMainGuild(client);
     }, 5 * 60 * 1000, { jitterMs: 45 * 1000, singleton: true });
 
     registerJob('levels.syncRoles', async () => {

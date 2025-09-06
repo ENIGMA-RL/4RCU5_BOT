@@ -1,7 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { rolesConfig, isDev } from '../../config/configLoader.js';
-import { fetchUserPrimaryGuild } from '../../lib/discordProfileApi.js';
-import { setCnsTagEquippedWithGuild as recordEquipped, setCnsTagUnequippedWithGuild as recordUnequipped } from '../../repositories/tagRepo.js';
+import { mirrorFromSourceRole, mirrorUserFromSourceRole } from '../../features/tagSync/tagSyncService.js';
 import logger from '../../utils/logger.js';
 
 export const data = {
@@ -37,26 +36,7 @@ export const execute = async (interaction) => {
     }
     
     const guild = interaction.guild;
-    const roleId = rolesConfig().cnsOfficialRole;
-    const guildId = guild.id;
-
-    // reconcile helper
-    const reconcile = async (userId) => {
-      const { identity_enabled, identity_guild_id } = await fetchUserPrimaryGuild(userId, guildId);
-      const hasTag = Boolean(identity_enabled && identity_guild_id === guildId);
-      const member = await guild.members.fetch(userId).catch(() => null);
-      if (!member) return { changed: false };
-      if (hasTag && !member.roles.cache.has(roleId)) {
-        await member.roles.add(roleId, 'manual tag sync');
-        try { recordEquipped(member.id, guildId); } catch {}
-        return { changed: true, added: 1 };
-      } else if (!hasTag && member.roles.cache.has(roleId)) {
-        await member.roles.remove(roleId, 'manual tag sync');
-        try { recordUnequipped(member.id, guildId); } catch {}
-        return { changed: true, removed: 1 };
-      }
-      return { changed: false };
-    };
+    // mirror-style reconciliation
 
     const targetUser = interaction.options.getUser('user');
     const doAll = interaction.options.getBoolean('all') === true;
@@ -64,22 +44,16 @@ export const execute = async (interaction) => {
 
     let processed = 0, added = 0, removed = 0;
     if (doAll) {
-      const members = await guild.members.fetch();
-      for (const [id] of members) {
-        try {
-          const r = await reconcile(id);
-          processed++;
-          if (r.added) added += r.added;
-          if (r.removed) removed += r.removed;
-          await new Promise(res => setTimeout(res, 200));
-        } catch {}
-      }
+      const res = await mirrorFromSourceRole(interaction.client);
+      processed = res.count;
+      added = res.updated;
+      removed = res.removed;
     } else {
       const id = (targetUser?.id) || interaction.user.id;
-      const r = await reconcile(id);
+      const r = await mirrorUserFromSourceRole(interaction.client, id);
       processed = 1;
-      if (r.added) added += r.added;
-      if (r.removed) removed += r.removed;
+      added = r.added || 0;
+      removed = r.removed || 0;
     }
     const result = { count: processed, updated: added, removed };
 

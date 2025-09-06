@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { rolesConfig, channelsConfig } from '../../config/configLoader.js';
+import { getLiveTagCount } from '../../services/tagService.js';
 import { syncTagRolesFromGuild } from '../tagSync/tagSyncService.js';
 import logger from '../../utils/logger.js';
 
@@ -31,9 +32,8 @@ export async function updateStats(client, guildId, channelId) {
     const botCount = guild.members.cache.filter(member => member.user.bot).size;
     const humanMembers = totalMembers - botCount;
 
-    // Calculate CNS tags count (members with CNS Official role)
-    const cnsOfficialRole = await guild.roles.fetch(rolesConfig().cnsOfficialRole);
-    const cnsTagsCount = cnsOfficialRole ? guild.members.cache.filter(m => m.roles.cache.has(cnsOfficialRole.id)).size : 0;
+    // CNS tag count via tagService (single source of truth)
+    const cnsTagsCount = await getLiveTagCount(client);
 
     // Get server boost count
     const boostCount = guild.premiumSubscriptionCount;
