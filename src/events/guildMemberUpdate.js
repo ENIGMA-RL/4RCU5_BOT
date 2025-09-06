@@ -4,16 +4,69 @@ import { staffConfig } from '../config/configLoader.js';
 import { giveawayConfig } from '../config/configLoader.js';
 import { recordRoleFirstSeen } from '../repositories/tagRepo.js';
 import { rolesConfig } from '../config/configLoader.js';
-import { fetchRoleHolders } from '../utils/discordHelpers.js';
 import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from '../repositories/tagRepo.js';
 import { logTagSync } from '../utils/botLogger.js';
 import logger from '../utils/logger.js';
+import { mirrorSingleUser } from '../services/tagService.js';
+import { fetchUserPrimaryGuild } from '../lib/discordProfileApi.js';
+
+const TAG_GUILD_ID = process.env.TAG_GUILD_ID;
+const TAG_GUILD_ROLE_ID = process.env.TAG_GUILD_ROLE_ID;
 
 export const name = 'guildMemberUpdate';
 export const once = false;
 
 export async function execute(oldMember, newMember) {
   logger.trace(`guildMemberUpdate event for user ${newMember.user.tag} (${newMember.id})`);
+
+  // Handle tag-guild mirroring here to guarantee this handler runs
+  try {
+    if (TAG_GUILD_ID && TAG_GUILD_ROLE_ID && newMember.guild.id === TAG_GUILD_ID) {
+      const had = oldMember?.roles?.cache?.has(TAG_GUILD_ROLE_ID) ?? false;
+      const has = newMember.roles.cache.has(TAG_GUILD_ROLE_ID);
+      logger.info({ userId: newMember.id, had, has }, '[TagEvent/MainHandler] guildMemberUpdate role delta');
+      if (had !== has) {
+        await mirrorSingleUser(newMember.client, newMember.id, has);
+      }
+      return; // do not run main-guild branch for tag-guild events
+    }
+  } catch (e) {
+    logger.error({ err: e }, '[TagEvent/MainHandler] mirror failed');
+  }
+
+  // API-based check (primary_guild) for MAIN guild – instant, no mirror role needed
+  try {
+    const mainGuildId = (await import('../config/configLoader.js')).rolesConfig().mainGuildId || null;
+    const officialRoleId = (await import('../config/configLoader.js')).rolesConfig().cnsOfficialRole || null;
+    if (!mainGuildId || !officialRoleId) return;
+    if (newMember.guild.id !== mainGuildId) return;
+
+    logger.info({ userId: newMember.id }, '[TagAPI] checking primary_guild');
+    const { identity_enabled, identity_guild_id } = await fetchUserPrimaryGuild(newMember.id, mainGuildId);
+    const hasTag = Boolean(identity_enabled && identity_guild_id === mainGuildId);
+    const hasRole = newMember.roles.cache.has(officialRoleId);
+    logger.info({ userId: newMember.id, hasTag, hasRole, identity_enabled, identity_guild_id }, '[TagAPI] result');
+
+    if (hasTag && !hasRole) {
+      try {
+        await newMember.roles.add(officialRoleId, 'Server tag enabled (API)');
+        try { setCnsTagEquippedWithGuild(newMember.id, mainGuildId); } catch {}
+        try { await logTagSync(newMember.client, newMember.id, newMember.user?.tag || newMember.id, 'Added', 'API sync'); } catch {}
+      } catch (err) {
+        logger.error({ err }, '[TagAPI] add role failed');
+      }
+    } else if (!hasTag && hasRole) {
+      try {
+        await newMember.roles.remove(officialRoleId, 'Server tag disabled (API)');
+        try { setCnsTagUnequippedWithGuild(newMember.id, mainGuildId); } catch {}
+        try { await logTagSync(newMember.client, newMember.id, newMember.user?.tag || newMember.id, 'Removed', 'API sync'); } catch {}
+      } catch (err) {
+        logger.error({ err }, '[TagAPI] remove role failed');
+      }
+    }
+  } catch (e) {
+    logger.error({ err: e }, '[TagAPI] check failed');
+  }
   
   // Track role tenure for giveaway eligibility
   const cfg = giveawayConfig();
