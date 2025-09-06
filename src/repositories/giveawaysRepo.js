@@ -1,93 +1,93 @@
+// src/repositories/giveawaysRepo.js
 import db from '../database/connection.js';
 import logger from '../utils/logger.js';
 
 function ensureGiveawaysSchema() {
   try {
-    // hard escape hatch (optioneel via env)
-    if (process.env.SKIP_GV_SCHEMA_REBUILD === 'true') return;
-
     const cols = db.prepare("PRAGMA table_info('giveaways')").all();
-    if (!cols || cols.length === 0) return; // aangemaakt door initializer
+    // Als de tabel nog niet bestaat laat de initializer 'm aanmaken
+    if (!cols || cols.length === 0) return;
 
     const byName = new Map(cols.map(c => [c.name, c]));
     let rebuild = false;
 
-    // verwacht schema (let op: message_id is NOT NULL)
-    const required = {
-      id:        { type: 'TEXT',    notnull: true  },
-      guild_id:  { type: 'TEXT',    notnull: true  },
-      channel_id:{ type: 'TEXT',    notnull: true  },
-      message_id:{ type: 'TEXT',    notnull: true  },
-      description:{ type: 'TEXT',   notnull: true  },
-      image_url: { type: 'TEXT',    notnull: false },
-      end_at:    { type: 'INTEGER', notnull: true  },
-      status:    { type: 'TEXT',    notnull: true  },
-      pending_winner_user_id:   { type: 'TEXT', notnull: false },
-      published_winner_user_id: { type: 'TEXT', notnull: false },
-      created_by:{ type: 'TEXT',    notnull: true  },
-      created_at:{ type: 'INTEGER', notnull: true  },
-    };
+    // Alleen controleren of verplichte kolommen bestaan
+    const mustHave = [
+      'id',
+      'guild_id',
+      'channel_id',
+      'message_id',
+      'description',
+      'image_url',
+      'end_at',
+      'status',
+      'pending_winner_user_id',
+      'published_winner_user_id',
+      'created_by',
+      'created_at',
+    ];
+    for (const n of mustHave) {
+      if (!byName.has(n)) { rebuild = true; break; }
+    }
 
-    for (const [name, spec] of Object.entries(required)) {
-      const col = byName.get(name);
-      if (!col) { rebuild = true; break; }
-      const t = String(col.type || '').toUpperCase();
-      if (!t.includes(spec.type)) { rebuild = true; break; }
-      if (typeof spec.notnull === 'boolean' && !!col.notnull !== spec.notnull) { rebuild = true; break; }
+    // Kritieke integer-kolommen moeten integer-affinity hebben
+    if (!rebuild) {
+      const ints = ['end_at', 'created_at'];
+      for (const n of ints) {
+        const col = byName.get(n);
+        const t = String(col?.type || '').toUpperCase();
+        if (!t.includes('INT')) { rebuild = true; break; }
+      }
     }
 
     if (!rebuild) return;
 
-    logger.warn('rebuilding giveaways table to match expected schema (non-destructive)');
-
-    try {
-      db.exec('PRAGMA foreign_keys=OFF'); // voorkom cascade delete tijdens drop/rename
-      db.exec(`
-        BEGIN;
-        CREATE TABLE IF NOT EXISTS giveaways_new (
-          id TEXT PRIMARY KEY,
-          guild_id TEXT NOT NULL,
-          channel_id TEXT NOT NULL,
-          message_id TEXT NOT NULL,
-          description TEXT NOT NULL,
-          image_url TEXT,
-          end_at INTEGER NOT NULL,
-          status TEXT NOT NULL CHECK (status IN ('open','closed','drawn_unpublished','published')),
-          pending_winner_user_id TEXT,
-          published_winner_user_id TEXT,
-          created_by TEXT NOT NULL,
-          created_at INTEGER NOT NULL
-        );
-        INSERT INTO giveaways_new (
-          id, guild_id, channel_id, message_id, description, image_url, end_at, status,
-          pending_winner_user_id, published_winner_user_id, created_by, created_at
-        )
-        SELECT 
-          id,
-          COALESCE(guild_id, ''),
-          COALESCE(channel_id, ''),
-          COALESCE(message_id, ''),
-          COALESCE(description, ''),
-          image_url,
-          CAST(COALESCE(end_at, strftime('%s','now')*1000) AS INTEGER),
-          CASE
-            WHEN status IN ('open','closed','drawn_unpublished','published') THEN status
-            ELSE 'open'
-          END,
-          pending_winner_user_id,
-          published_winner_user_id,
-          COALESCE(created_by, ''),
-          CAST(COALESCE(created_at, strftime('%s','now')*1000) AS INTEGER)
-        FROM giveaways;
-        DROP TABLE giveaways;
-        ALTER TABLE giveaways_new RENAME TO giveaways;
-        COMMIT;
-      `);
-    } finally {
-      db.exec('PRAGMA foreign_keys=ON');
-    }
+    logger.warn('Rebuilding giveaways table to match expected schema (non-destructive)');
+    db.exec(`
+      PRAGMA foreign_keys=OFF;
+      BEGIN;
+      CREATE TABLE IF NOT EXISTS giveaways_new (
+        id TEXT PRIMARY KEY,
+        guild_id TEXT NOT NULL,
+        channel_id TEXT NOT NULL,
+        message_id TEXT NOT NULL,
+        description TEXT NOT NULL,
+        image_url TEXT,
+        end_at INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('open','closed','drawn_unpublished','published')),
+        pending_winner_user_id TEXT,
+        published_winner_user_id TEXT,
+        created_by TEXT NOT NULL,
+        created_at INTEGER NOT NULL
+      );
+      INSERT INTO giveaways_new (
+        id, guild_id, channel_id, message_id, description, image_url, end_at, status,
+        pending_winner_user_id, published_winner_user_id, created_by, created_at
+      )
+      SELECT 
+        id,
+        COALESCE(guild_id, ''),
+        COALESCE(channel_id, ''),
+        COALESCE(message_id, ''),
+        COALESCE(description, ''),
+        image_url,
+        CAST(COALESCE(end_at, strftime('%s','now')*1000) AS INTEGER),
+        CASE
+          WHEN status IN ('open','closed','drawn_unpublished','published') THEN status
+          ELSE 'open'
+        END,
+        pending_winner_user_id,
+        published_winner_user_id,
+        COALESCE(created_by, ''),
+        CAST(COALESCE(created_at, strftime('%s','now')*1000) AS INTEGER)
+      FROM giveaways;
+      DROP TABLE giveaways;
+      ALTER TABLE giveaways_new RENAME TO giveaways;
+      COMMIT;
+      PRAGMA foreign_keys=ON;
+    `);
   } catch (e) {
-    logger.error({ err: e }, 'failed to ensure giveaways schema');
+    logger.error({ err: e }, 'Failed to ensure giveaways schema');
   }
 }
 
@@ -179,34 +179,32 @@ export function addEntry(giveawayId, userId, tickets) {
   return db.prepare(`
     INSERT INTO giveaway_entries (giveaway_id, user_id, tickets, joined_at, withdrawn_at)
     VALUES (?, ?, ?, ?, NULL)
-    ON CONFLICT(giveaway_id, user_id) DO UPDATE SET
-      tickets = excluded.tickets,
-      withdrawn_at = NULL,
-      joined_at = excluded.joined_at
+    ON CONFLICT(giveaway_id, user_id) 
+    DO UPDATE SET tickets=excluded.tickets, withdrawn_at=NULL, joined_at=excluded.joined_at
   `).run(giveawayId, userId, tickets, Date.now());
 }
 
 export function withdrawEntry(giveawayId, userId) {
-  return db.prepare(`
-    UPDATE giveaway_entries 
-    SET withdrawn_at = ? 
-    WHERE giveaway_id = ? AND user_id = ?
-  `).run(Date.now(), giveawayId, userId);
+  return db.prepare(
+    `UPDATE giveaway_entries 
+     SET withdrawn_at = ? 
+     WHERE giveaway_id = ? AND user_id = ?`
+  ).run(Date.now(), giveawayId, userId);
 }
 
 export function listActiveEntries(giveawayId) {
-  return db.prepare(`
-    SELECT user_id, tickets, withdrawn_at 
-    FROM giveaway_entries 
-    WHERE giveaway_id = ? AND withdrawn_at IS NULL
-  `).all(giveawayId);
+  return db.prepare(
+    `SELECT user_id, tickets, withdrawn_at 
+     FROM giveaway_entries 
+     WHERE giveaway_id = ? AND withdrawn_at IS NULL`
+  ).all(giveawayId);
 }
 
 export function countActiveEntries(giveawayId) {
-  const row = db.prepare(`
-    SELECT COUNT(*) AS c 
-    FROM giveaway_entries 
-    WHERE giveaway_id = ? AND withdrawn_at IS NULL
-  `).get(giveawayId);
-  return row?.c ?? 0;
+  const row = db.prepare(
+    `SELECT COUNT(*) AS c 
+     FROM giveaway_entries 
+     WHERE giveaway_id = ? AND withdrawn_at IS NULL`
+  ).get(giveawayId);
+  return row?.c || 0;
 }
