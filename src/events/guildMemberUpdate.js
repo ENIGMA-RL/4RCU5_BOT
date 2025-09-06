@@ -4,6 +4,7 @@ import { staffConfig } from '../config/configLoader.js';
 import { giveawayConfig } from '../config/configLoader.js';
 import { recordRoleFirstSeen } from '../repositories/tagRepo.js';
 import { rolesConfig } from '../config/configLoader.js';
+import { fetchRoleHolders } from '../utils/discordHelpers.js';
 import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from '../repositories/tagRepo.js';
 import { logTagSync } from '../utils/botLogger.js';
 import logger from '../utils/logger.js';

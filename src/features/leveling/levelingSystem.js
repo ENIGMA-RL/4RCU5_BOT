@@ -1,4 +1,5 @@
-import { createUser, getUser, updateUserXP, updateUserLevel, getTopUsers } from '../../repositories/usersRepo.js';
+import { createUser, getUser, updateUserXP, updateUserLevel } from '../../repositories/usersRepo.js';
+import db from '../../database/connection.js';
 import { channelsConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import logger from '../../utils/logger.js';
 
@@ -325,14 +326,35 @@ export function getUserLevelData(userId) {
   };
 }
 
-export async function getTopUsersByType(type, limit = 10) {
-  const users = getTopUsers(limit);
-  
-  if (type === 'message') {
-    return users.sort((a, b) => b.xp - a.xp);
-  } else if (type === 'voice') {
-    return users.sort((a, b) => b.voice_xp - a.voice_xp);
-  } else {
-    return users; // Already sorted by total XP
-  }
+export function getTopUsersByType(type = 'total', limit = 1000, opts = {}) {
+  const activeOnly = opts.activeOnly !== false; // default true
+  const activeClause = activeOnly ? 'WHERE COALESCE(left_server,0)=0' : '';
+  const base = `
+    SELECT user_id, xp, voice_xp, level, (xp + voice_xp) AS total_xp
+    FROM users
+    ${activeClause}
+  `;
+  const order =
+    type === 'message' ? 'ORDER BY xp DESC' :
+    type === 'voice'   ? 'ORDER BY voice_xp DESC' :
+                         'ORDER BY total_xp DESC';
+  return db.prepare(`${base} ${order} LIMIT ?`).all(limit);
+}
+
+export function getServerRankActive(userId, type = 'total') {
+  const field =
+    type === 'message' ? 'xp' :
+    type === 'voice'   ? 'voice_xp' :
+                         '(xp + voice_xp)';
+
+  const row = db
+    .prepare(`SELECT ${field} AS score, COALESCE(left_server,0) AS active FROM users WHERE user_id = ?`)
+    .get(userId);
+  if (!row) return null;
+  if (row.active !== 0) return null;
+
+  const higher = db
+    .prepare(`SELECT COUNT(*) AS n FROM users WHERE COALESCE(left_server,0)=0 AND ${field} > ?`)
+    .get(row.score).n;
+  return 1 + higher;
 }

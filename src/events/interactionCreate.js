@@ -465,7 +465,7 @@ async function handleGiveawayButton(interaction) {
     if (!giveawayId) {
       await interaction.followUp({
         content: '❌ invalid giveaway button.',
-        ephemeral: true
+        flags: 64
       });
       return;
     }
@@ -486,7 +486,7 @@ async function handleGiveawayButton(interaction) {
         
         await interaction.followUp({
           content: `✅ successfully joined the giveaway! you have ${result.tickets} ticket(s).`,
-          ephemeral: true
+          flags: 64
         });
         break;
       }
@@ -500,7 +500,7 @@ async function handleGiveawayButton(interaction) {
         
         await interaction.followUp({
           content: '✅ successfully withdrawn from the giveaway.',
-          ephemeral: true
+          flags: 64
         });
         break;
       }
@@ -508,7 +508,7 @@ async function handleGiveawayButton(interaction) {
       default: {
         await interaction.followUp({
           content: '❌ unknown giveaway action.',
-          ephemeral: true
+          flags: 64
         });
         return;
       }
@@ -520,7 +520,7 @@ async function handleGiveawayButton(interaction) {
     try {
       await interaction.followUp({
         content: `❌ an error occurred: ${error.message}`,
-        ephemeral: true
+        flags: 64
       });
     } catch (followUpError) {
       if (followUpError.code === 10062) {
