@@ -40,6 +40,13 @@ export const execute = async (interaction) => {
     }
 
     await interaction.deferReply({ flags: 64 });
+
+    // Early guard for dev: allow override via env
+    const allowDevWrites = process.env.ALLOW_DEV_TAG_WRITES === 'true';
+    if (isDev() && !allowDevWrites) {
+      await interaction.editReply({ content: 'ℹ️ Tag sync is disabled in development. Set ALLOW_DEV_TAG_WRITES=true to enable.', flags: 64 });
+      return;
+    }
     
     const syncType = interaction.options.getString('type') || 'full';
     
@@ -50,7 +57,7 @@ export const execute = async (interaction) => {
       result = await syncTagRolesFromGuild(interaction.guild, interaction.client);
     }
 
-    if (isDev()) {
+    if (isDev() && !allowDevWrites) {
       const embed = new EmbedBuilder()
         .setTitle('🔄 CNS Tag Role Sync Results')
         .setColor('#ffff00') // Yellow for development

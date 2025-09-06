@@ -12,25 +12,22 @@ import logger from '../../utils/logger.js';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Simple cache for user data to avoid repeated fetches
-const userCache = new Map();
+// Simple cache for guild members to avoid repeated fetches
+const memberCache = new Map();
 const CACHE_DURATION = 5 * 60 * 1000; // 5 minutes
 
 // Helper function to get cached user data
-function getCachedUser(userId) {
-  const cached = userCache.get(userId);
+function getCachedMember(userId) {
+  const cached = memberCache.get(userId);
   if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
-    return cached.user;
+    return cached.member;
   }
   return null;
 }
 
 // Helper function to cache user data
-function cacheUser(userId, user) {
-  userCache.set(userId, {
-    user: user,
-    timestamp: Date.now()
-  });
+function cacheMember(userId, member) {
+  memberCache.set(userId, { member, timestamp: Date.now() });
 }
 
 export const data = {
@@ -96,42 +93,40 @@ export const execute = async (interaction) => {
     
     logger.debug(`Processing ${textUsers.length} text users and ${voiceUsers.length} voice users (${allUserIds.length} unique users)`);
     
-    // Check cache first and only fetch uncached users
+    // Check cache first and only fetch uncached members
     const uncachedIds = [];
-    const cachedUsers = new Map();
+    const cachedMembers = new Map();
     
     for (const userId of allUserIds) {
-      const cached = getCachedUser(userId);
+      const cached = getCachedMember(userId);
       if (cached) {
-        cachedUsers.set(userId, cached);
+        cachedMembers.set(userId, cached);
       } else {
         uncachedIds.push(userId);
       }
     }
     
-    logger.debug(`Using ${cachedUsers.size} cached users, fetching ${uncachedIds.length} new users`);
+    logger.debug(`Using ${cachedMembers.size} cached members, fetching ${uncachedIds.length} new members`);
     
-    // Batch fetch only uncached users from Discord API
+    // Batch fetch only uncached members from Discord API
     let newUsers = [];
     if (uncachedIds.length > 0) {
       newUsers = await Promise.all(
-        uncachedIds.map(id => 
-          interaction.client.users.fetch(id).catch(() => null)
-        )
+        uncachedIds.map(id => interaction.guild.members.fetch(id).catch(() => null))
       );
       
-      // Cache the newly fetched users
-      newUsers.forEach((user, index) => {
-        if (user) {
+      // Cache the newly fetched members
+      newUsers.forEach((member, index) => {
+        if (member) {
           const userId = uncachedIds[index];
-          cacheUser(userId, user);
-          cachedUsers.set(userId, user);
+          cacheMember(userId, member);
+          cachedMembers.set(userId, member);
         }
       });
     }
     
-    // Create a map for fast user lookup (combines cached and new users)
-    const userMap = cachedUsers;
+    // Create a map for fast member lookup (combines cached and new)
+    const userMap = cachedMembers;
     
     // Process only current page users
     const textUserInfos = await processTextUsers(pagedTextRaw, userMap);
@@ -184,19 +179,19 @@ async function processTextUsers(textUsers, userMap) {
   const textUserInfos = [];
   
   for (const u of textUsers) {
-    const user = userMap.get(u.user_id);
-    if (!user) {
-      logger.debug(`Skipping deleted text user: ${u.user_id}`);
+    const member = userMap.get(u.user_id);
+    if (!member) {
+      logger.debug(`Skipping non-member text user: ${u.user_id}`);
       continue;
     }
     
     // Add user to the list (database already filtered out users who left)
     textUserInfos.push({ 
       ...u, 
-      username: user.username, 
-      avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 })
+      username: member.displayName || member.user.username, 
+      avatarURL: member.user.displayAvatarURL({ extension: 'png', size: 128 })
     });
-    logger.debug(`Text user: ${user.username} (${u.user_id})`);
+    logger.debug(`Text user: ${member.displayName || member.user.username} (${u.user_id})`);
   }
   
   return textUserInfos;
@@ -207,19 +202,19 @@ async function processVoiceUsers(voiceUsers, userMap) {
   const voiceUserInfos = [];
   
   for (const u of voiceUsers) {
-    const user = userMap.get(u.user_id);
-    if (!user) {
-      logger.debug(`Skipping deleted voice user: ${u.user_id}`);
+    const member = userMap.get(u.user_id);
+    if (!member) {
+      logger.debug(`Skipping non-member voice user: ${u.user_id}`);
       continue;
     }
     
     // Add user to the list (database already filtered out users who left)
     voiceUserInfos.push({ 
       ...u, 
-      username: user.username, 
-      avatarURL: user.displayAvatarURL({ extension: 'png', size: 128 })
+      username: member.displayName || member.user.username, 
+      avatarURL: member.user.displayAvatarURL({ extension: 'png', size: 128 })
     });
-    logger.debug(`Voice user: ${user.username} (${u.user_id})`);
+    logger.debug(`Voice user: ${member.displayName || member.user.username} (${u.user_id})`);
   }
   
   return voiceUserInfos;

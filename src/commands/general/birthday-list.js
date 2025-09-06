@@ -13,6 +13,8 @@ export async function execute(interaction) {
   const guildId = interaction.guildId;
   const guildName = interaction.guild?.name || 'Server';
   const list = getBirthdaysForGuild ? getBirthdaysForGuild(guildId) : [];
+  // Ensure we have an up-to-date member cache to exclude users who left/banned
+  try { await interaction.guild.members.fetch(); } catch {}
 
   const months = [
     'January','February','March','April','May','June',
@@ -21,6 +23,8 @@ export async function execute(interaction) {
 
   const byMonth = new Map();
   for (const b of list) {
+    // Skip users not in the guild anymore
+    if (!interaction.guild.members.cache.has(b.user_id)) continue;
     const key = b.birth_month;
     if (!byMonth.has(key)) byMonth.set(key, []);
     byMonth.get(key).push(b);
