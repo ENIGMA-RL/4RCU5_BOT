@@ -8,6 +8,7 @@ import logger from '../utils/logger.js';
  * - Geen DROP/RENAME/REBUILD en al helemaal geen DELETEs.
  */
 function ensureGiveawaysSchema() {
+  if (process.env.SKIP_GIVEAWAYS_MIGRATION === '1') { logger.warn('Skipping giveaways schema migration (env flag set)'); return; }
   try {
     // 1) Maak aan als niet bestaat (vol schema, met constraints)
     db.exec(`
@@ -76,7 +77,7 @@ function ensureGiveawaysSchema() {
 if (process.env.SKIP_GIVEAWAYS_MIGRATION === '1') {
   logger.warn('Skipping giveaways schema migration (env flag set)');
 } else {
-  ensureGiveawaysSchema();
+  if (process.env.SKIP_GIVEAWAYS_MIGRATION === '1') { logger.warn('Skipping giveaways schema migration (env flag set)'); } else { ensureGiveawaysSchema(); }
 }
 
 /* === Data-access functies === */
