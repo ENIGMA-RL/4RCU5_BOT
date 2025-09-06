@@ -14,7 +14,7 @@ yarn-error.log*
 .env.prod
 
 # Database
-src/database/bot.db
+
 
 # MacOS
 .DS_Store
@@ -67,4 +67,3 @@ coverage/
 config.test/ 
 
 # CNS Bot database
-src/database/bot.db 
