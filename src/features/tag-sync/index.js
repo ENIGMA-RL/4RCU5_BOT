@@ -1,7 +1,7 @@
 import { Events } from 'discord.js';
 import { fetchUserPrimaryGuild } from '../../lib/discordProfileApi.js';
 import logger from '../../utils/logger.js';
-import { setCnsTagEquippedWithGuild as recordEquipped, setCnsTagUnequippedWithGuild as recordUnequipped } from '../tagSync/../repositories/tagRepo.js';
+import { setCnsTagEquippedWithGuild as recordEquipped, setCnsTagUnequippedWithGuild as recordUnequipped } from '../../repositories/tagRepo.js';
 
 export function registerTagSync(client, { guildId, roleId }) {
   const last = new Map();

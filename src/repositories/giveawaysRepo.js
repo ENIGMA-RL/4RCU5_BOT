@@ -187,3 +187,13 @@ export function listActiveEntries(giveawayId) {
     WHERE giveaway_id = ? AND withdrawn_at IS NULL
   `).all(giveawayId);
 }
+
+// Added to satisfy imports in features/giveaway/service.js
+export function countActiveEntries(giveawayId) {
+  const row = db.prepare(`
+    SELECT COUNT(*) AS c
+    FROM giveaway_entries
+    WHERE giveaway_id = ? AND withdrawn_at IS NULL
+  `).get(giveawayId);
+  return (row && row.c) || 0;
+}

@@ -20,6 +20,7 @@ import { registerJob, startAll } from './scheduler/index.js';
 import { tick as voiceTick } from './features/leveling/voiceSessionService.js';
 // Ensure database schema and migrations are applied on startup
 import './database/db.js';
+import { registerTagSync } from './features/tag-sync/index.js';
 
 // Load environment variables
 dotenv.config();
@@ -88,8 +89,9 @@ client.once('ready', async () => {
     logger.debug(`  - ${g.name} (${g.id})`);
   });
   
-  const GUILD_ID = process.env.GUILD_ID;
-  logger.info({ GUILD_ID }, 'Using GUILD_ID from environment');
+  const cfgGuildId = rolesConfig().mainGuildId || rolesConfig().main_guild_id || null;
+  const GUILD_ID = cfgGuildId || process.env.GUILD_ID;
+  logger.info({ GUILD_ID, source: cfgGuildId ? 'rolesConfig' : 'env' }, 'Selecting main guild');
   let guild = client.guilds.cache.get(GUILD_ID);
   
   // If the specified guild is not found, use the first available guild
@@ -212,6 +214,21 @@ client.once('ready', async () => {
   
   // Register commands dynamically based on roles
   await registerCommands(client);
+
+  // Register real-time tag sync on user profile changes (OAuth/API primary_guild)
+  try {
+    const roleCfg = rolesConfig();
+    const mainGuildId = roleCfg.mainGuildId || roleCfg.main_guild_id || null;
+    const tagRoleId = roleCfg.cnsOfficialRole || roleCfg.cns_official_role || null;
+    if (mainGuildId && tagRoleId) {
+      registerTagSync(client, { guildId: mainGuildId, roleId: tagRoleId });
+      logger.info({ mainGuildId, tagRoleId }, 'UserUpdate listener registered for tag sync');
+    } else {
+      logger.warn({ mainGuildId, tagRoleId }, 'Skipping UserUpdate listener registration (missing IDs)');
+    }
+  } catch (e) {
+    logger.error({ err: e }, 'Failed to register UserUpdate listener for tag sync');
+  }
 });
 
 // Export the client for use in other modules
