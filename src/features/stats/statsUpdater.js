@@ -1,25 +1,26 @@
 import { EmbedBuilder } from 'discord.js';
 import { rolesConfig, channelsConfig } from '../../config/configLoader.js';
 import { syncTagRolesFromGuild } from '../tagSync/tagSyncService.js';
+import logger from '../../utils/logger.js';
 
 // Function to update server stats
 export async function updateStats(client, guildId, channelId) {
   try {
     // Check if client is ready
     if (!client || !client.isReady()) {
-      console.log('Client not ready, skipping stats update');
+      logger.debug('Client not ready, skipping stats update');
       return;
     }
 
     const guild = await client.guilds.fetch(guildId);
     if (!guild) {
-      console.error('Guild not found.');
+      logger.error('Guild not found.');
       return;
     }
 
     const channel = await guild.channels.fetch(channelId);
     if (!channel) {
-      console.error('Stats channel not found.');
+      logger.error('Stats channel not found.');
       return;
     }
 
@@ -63,59 +64,58 @@ export async function updateStats(client, guildId, channelId) {
     } else {
       await channel.send({ embeds: [embed] });
     }
-    // Optionally keep this log if you want to track stats updates
-    // console.log(`Updated server stats: ${humanMembers} members, ${cnsTagsCount} CNS tags, ${boostCount} boosts`);
+    // trace-only if needed
   } catch (error) {
-    console.error('Error updating server stats:', error);
+    logger.error({ err: error }, 'Error updating server stats');
   }
 }
 
 // Schedule periodic stats updates
 export function scheduleStatsUpdate(client, guildId, channelId) {
-  console.log('📊 Starting periodic stats update interval');
+  logger.info('Starting periodic stats update interval');
   
   // Initial update
-  console.log('📊 Running initial stats update...');
+  logger.debug('Running initial stats update...');
   updateStats(client, guildId, channelId);
   
   setInterval(async () => {
     try {
-      console.log('📊 Updating server stats...');
+      logger.debug('Updating server stats...');
       await updateStats(client, guildId, channelId);
-      console.log('✅ Server stats updated successfully');
+      logger.debug('Server stats updated successfully');
     } catch (error) {
-      console.error('Error during periodic stats update:', error);
+      logger.error({ err: error }, 'Error during periodic stats update');
     }
   }, 5 * 60 * 1000); // 5 minutes
 }
 
 // Periodic tag sync: every 5 minutes, sync all users' tag roles using bot token approach
 export async function scheduleTagRoleSync(client, guildId) {
-  console.log('🔄 Starting periodic tag role sync interval');
+  logger.info('Starting periodic tag role sync interval');
   setInterval(async () => {
     try {
-      console.log('🔄 Running periodic tag role sync...');
+      logger.debug('Running periodic tag role sync...');
       let guild = client.guilds.cache.get(guildId);
       if (!guild) {
         // Try to fetch the guild if it's not in cache
         try {
           guild = await client.guilds.fetch(guildId);
-          console.log(`✅ Fetched guild ${guild.name} (${guild.id}) for tag sync`);
+          logger.debug(`Fetched guild ${guild.name} (${guild.id}) for tag sync`);
         } catch (fetchError) {
-          console.error(`❌ Could not fetch guild ${guildId} for periodic tag sync:`, fetchError.message);
+          logger.error({ err: fetchError }, `Could not fetch guild ${guildId} for periodic tag sync`);
           return;
         }
       }
       const result = await syncTagRolesFromGuild(guild, client);
       if (result) {
-        console.log(`✅ Periodic tag sync completed. Members with tag: ${result.count}, Roles added: ${result.updated}, Roles removed: ${result.removed}`);
+        logger.info(`Periodic tag sync completed. Members with tag: ${result.count}, Roles added: ${result.updated}, Roles removed: ${result.removed}`);
         // Update stats after successful sync
         await updateStats(client, guild.id, channelsConfig().statsChannelId);
       } else {
-        console.error('❌ Periodic tag sync failed: No result returned');
+        logger.error('Periodic tag sync failed: No result returned');
       }
     } catch (error) {
-      console.error('Error during periodic tag role sync:', error);
+      logger.error({ err: error }, 'Error during periodic tag role sync');
     }
   }, 5 * 60 * 1000); // 5 minutes
 } 

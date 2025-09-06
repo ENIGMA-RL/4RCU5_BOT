@@ -1,5 +1,8 @@
 import { ApplicationCommandOptionType } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { isAdmin } from '../../utils/permissions.js';
+import { check as cdCheck, set as cdSet, formatRemaining as cdFormat } from '../../services/CooldownService.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'role-remove',
@@ -24,10 +27,9 @@ export const data = {
 export const execute = async (interaction) => {
   try {
     // Check if user has admin permissions
-    const memberRoles = interaction.member.roles.cache;
-    const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
+    const canAdmin = isAdmin(interaction.member);
     
-    if (!isAdmin) {
+    if (!canAdmin) {
       await interaction.reply({
         content: '❌ You need admin permissions to use this command.',
         flags: 64
@@ -37,6 +39,12 @@ export const execute = async (interaction) => {
 
     const user = interaction.options.getUser('user');
     const role = interaction.options.getRole('role');
+    const res = cdCheck(interaction.member, 'role-remove');
+    if (res.onCooldown) {
+      const remaining = cdFormat(res.remainingTime);
+      await interaction.reply({ content: `⏰ Try again in ${remaining}`, flags: 64 });
+      return;
+    }
     const targetMember = await interaction.guild.members.fetch(user.id);
 
     if (!targetMember) {
@@ -85,6 +93,7 @@ export const execute = async (interaction) => {
 
     // Remove the role
     await targetMember.roles.remove(role);
+    cdSet(interaction.member, 'role-remove');
     
     await interaction.reply({
       content: `✅ Successfully removed the **${role.name}** role from ${user.username}.`,
@@ -92,10 +101,10 @@ export const execute = async (interaction) => {
     });
 
     // Log the action
-    console.log(`Role removed: ${interaction.user.tag} removed ${role.name} from ${user.tag}`);
+    logger.info(`Role removed: ${interaction.user.tag} removed ${role.name} from ${user.tag}`);
 
   } catch (error) {
-    console.error('Error in role-remove command:', error);
+    logger.error({ err: error }, 'Error in role-remove command');
     await interaction.reply({
       content: '❌ An error occurred while removing the role.',
       flags: 64

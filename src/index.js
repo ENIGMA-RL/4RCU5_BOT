@@ -3,20 +3,23 @@
 // Import necessary modules
 import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
 import dotenv from 'dotenv';
-import { scheduleStatsUpdate, scheduleTagRoleSync, updateStats } from './features/stats/statsUpdater.js';
-import { scheduleStaffEmbedUpdate } from './features/staff/staffEmbed.js';
+import { updateStats } from './features/stats/statsUpdater.js';
+import { updateStaffEmbed } from './features/staff/staffEmbed.js';
 import { updateRulesEmbed } from './features/staff/rulesEmbed.js';
 import { checkBirthdays } from './features/birthday/birthdayManager.js';
-import { scheduleLevelRoleSync } from './features/leveling/levelRoleSync.js';
+import { syncLevelRoles } from './features/leveling/levelRoleSync.js';
 import { registerCommands } from './loaders/commandRegistrar.js';
 import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
 import { setPresence } from './features/presence/presenceManager.js';
 import { channelsConfig, getEnvironment, rolesConfig } from './config/configLoader.js';
-import { logTagSync } from './utils/botLogger.js';
-import { syncUserTagRole } from './features/tagSync/tagSyncService.js';
-import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild } from './database/db.js';
+// removed redundant inline tag sync handlers in favor of event/service
 import CleanupService from './features/system/cleanupService.js';
+import logger from './utils/logger.js';
+import { registerJob, startAll } from './scheduler/index.js';
+import { tick as voiceTick } from './features/leveling/voiceSessionService.js';
+// Ensure database schema and migrations are applied on startup
+import './database/db.js';
 
 // Load environment variables
 dotenv.config();
@@ -35,22 +38,20 @@ const client = new Client({
 
 // Add global error handlers to prevent crashes
 client.on('error', (error) => {
-  console.error('Client error:', error);
+  logger.error({ err: error }, 'Client error');
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-  console.error('Unhandled Rejection at:', promise, 'reason:', reason);
-  // Don't exit the process, just log the error
+  logger.error({ reason, promise }, 'Unhandled Rejection');
 });
 
 process.on('uncaughtException', (error) => {
-  console.error('Uncaught Exception:', error);
-  // Don't exit the process, just log the error
+  logger.error({ err: error }, 'Uncaught Exception');
 });
 
 // Add specific error handler for ticket-related operations
 process.on('warning', (warning) => {
-  console.warn('Process warning:', warning.name, warning.message);
+  logger.warn({ name: warning.name, message: warning.message }, 'Process warning');
 });
 
 // Initialize commands collection
@@ -69,129 +70,69 @@ const initializeBot = async () => {
 // Start the bot
 initializeBot();
 
-console.log('🔍 Importing scheduleStatsUpdate and scheduleTagRoleSync');
+logger.debug('Importing scheduler jobs');
 
 // Event listener for when the bot is ready
-client.on('guildMemberUpdate', (oldMember, newMember) => {
-  console.log('guildMemberUpdate event fired');
-  if (oldMember.nickname !== newMember.nickname) {
-    console.log(`${oldMember.user.tag} changed nickname from "${oldMember.nickname}" to "${newMember.nickname}"`);
-  }
-});
+// Duplicate guildMemberUpdate handler removed; handled in events/guildMemberUpdate.js
 
-client.on('raw', async (packet) => {
-  try {
-    if (packet.t === 'GUILD_MEMBER_UPDATE') {
-      const user = packet.d.user;
-      const tagData = user?.primary_guild;
-      const guildId = packet.d.guild_id;
-      const userId = user.id;
-
-      // Check if the tag is for the configured guild
-      const tagGuildId = rolesConfig().tagGuildId;
-      const isUsingTag = (tagData == null)
-        ? null
-        : Boolean(tagData.identity_enabled && tagData.identity_guild_id === tagGuildId);
-
-      const guild = client.guilds.cache.get(guildId);
-      if (!guild) {
-        console.error('Guild not found in cache.');
-        return;
-      }
-
-      // Assign/remove CNS Official role immediately based on tag data and write timestamps
-      const roleId = rolesConfig().cnsOfficialRole;
-      let member = guild.members.cache.get(userId);
-      if (!member) {
-        try { member = await guild.members.fetch(userId); } catch { member = null; }
-      }
-      if (!member) return;
-
-      const hasRole = member.roles.cache.has(roleId);
-      if (isUsingTag === true && !hasRole) {
-        try {
-          await member.roles.add(roleId, 'Server tag enabled');
-          try { await logTagSync(client, userId, member.user.tag, 'Added', 'Server tag enabled'); } catch {}
-        } catch {}
-        try { setCnsTagEquippedWithGuild(userId, guild.id); } catch {}
-      } else if (isUsingTag === false && hasRole) {
-        try {
-          await member.roles.remove(roleId, 'Server tag disabled');
-          try { await logTagSync(client, userId, member.user.tag, 'Removed', 'Server tag disabled'); } catch {}
-        } catch {}
-        try { setCnsTagUnequippedWithGuild(userId, guild.id); } catch {}
-      }
-
-      // Reconcile only if the event lacked tag data but member still has the role
-      if (isUsingTag === null && hasRole) {
-        try { await syncUserTagRole(userId, guild, client); } catch {}
-      }
-
-      if (typeof updateStats === 'function' && client.isReady()) {
-        await updateStats(client, guild.id, channelsConfig().statsChannelId);
-      }
-    }
-  } catch (error) {
-    console.error('Error in raw event handler:', error);
-  }
-});
+// Duplicate raw GUILD_MEMBER_UPDATE handling removed; rely on dedicated event/service
 
 client.once('ready', async () => {
-  console.log(`Logged in as ${client.user.tag}!`);
-  console.log(`Environment: ${getEnvironment()}`);
+  logger.info(`Logged in as ${client.user.tag}!`);
+  logger.info(`Environment: ${getEnvironment()}`);
   setPresence(client);
   
   // Log all available guilds for debugging
-  console.log('Available guilds:');
+  logger.debug('Available guilds:');
   client.guilds.cache.forEach(g => {
-    console.log(`  - ${g.name} (${g.id})`);
+    logger.debug(`  - ${g.name} (${g.id})`);
   });
   
   const GUILD_ID = process.env.GUILD_ID;
-  console.log('Using GUILD_ID from environment:', GUILD_ID);
+  logger.info({ GUILD_ID }, 'Using GUILD_ID from environment');
   let guild = client.guilds.cache.get(GUILD_ID);
   
   // If the specified guild is not found, use the first available guild
   if (!guild && client.guilds.cache.size > 0) {
     guild = client.guilds.cache.first();
-    console.log(`⚠️  Guild ${GUILD_ID} not found, using first available guild: ${guild.name} (${guild.id})`);
+    logger.warn(`Guild ${GUILD_ID} not found, using first available guild: ${guild.name} (${guild.id})`);
   }
   
   if (guild) {
-    console.log(`Connected to guild: ${guild.name} (${guild.id})`);
+    logger.info(`Connected to guild: ${guild.name} (${guild.id})`);
     
     // Fetch roles and members to ensure we have complete caches
     try { await guild.roles.fetch(); } catch {}
-    console.log('🔄 Fetching all guild members...');
+    logger.debug('Fetching all guild members...');
     try {
       await guild.members.fetch();
-      console.log(`✅ Fetched ${guild.members.cache.size} members`);
+      logger.info(`Fetched ${guild.members.cache.size} members`);
     } catch (error) {
-      console.error('❌ Error fetching members:', error);
+      logger.error({ err: error }, 'Error fetching members');
     }
     
     // Sync existing CNS tag holders on startup
-    console.log('🔄 Starting startup sync for existing CNS tag holders...');
+    logger.info('Starting startup sync for existing CNS tag holders...');
     try {
-      console.log('🔧 [DEBUG] Importing syncExistingTagHoldersOnStartup...');
+      logger.trace('Importing syncExistingTagHoldersOnStartup...');
       const { syncExistingTagHoldersOnStartup } = await import('./features/tagSync/tagSyncService.js');
-      console.log('🔧 [DEBUG] Function imported successfully, calling it...');
+      logger.trace('Function imported successfully, calling it...');
       const startupSyncResult = await syncExistingTagHoldersOnStartup(guild, client);
-      console.log('🔧 [DEBUG] Startup sync completed with result:', startupSyncResult);
+      logger.trace({ startupSyncResult }, 'Startup sync completed');
       if (startupSyncResult.success) {
-        console.log(`✅ Startup tag sync: ${startupSyncResult.message}`);
+        logger.info(`Startup tag sync: ${startupSyncResult.message}`);
       } else {
-        console.log(`⚠️ Startup tag sync failed: ${startupSyncResult.error}`);
+        logger.warn(`Startup tag sync failed: ${startupSyncResult.error}`);
       }
     } catch (error) {
-      console.error('❌ Error during startup tag sync:', error);
-      console.error('❌ Error stack:', error.stack);
+      logger.error({ err: error }, 'Error during startup tag sync');
+      logger.error(error.stack || '');
     }
     
     // backfill role tenure for existing cns tag holders
     try {
       const { giveawayConfig } = await import('./config/configLoader.js');
-      const { recordRoleFirstSeen } = await import('./database/db.js');
+      const { recordRoleFirstSeen } = await import('./repositories/tagRepo.js');
       const tagRoleId = giveawayConfig().tag_eligibility?.cns_tag_role_id;
       if (tagRoleId) {
         const membersWithTag = guild.members.cache.filter(m => m.roles.cache.has(tagRoleId));
@@ -199,71 +140,74 @@ client.once('ready', async () => {
           // idempotent: only sets if missing
           recordRoleFirstSeen(guild.id, m.id, tagRoleId);
         }
-        console.log(`✅ seeded role tenure for ${membersWithTag.size} tag holders`);
+        logger.info(`seeded role tenure for ${membersWithTag.size} tag holders`);
       }
     } catch (e) {
-      console.error('failed to seed role tenure:', e);
+      logger.error({ err: e }, 'failed to seed role tenure');
     }
     
-    // Schedule the stats update with proper guild ID
-    console.log('🔍 Calling scheduleStatsUpdate');
-    scheduleStatsUpdate(client, guild.id, channelsConfig().statsChannelId);
-    
-    // Schedule the staff embed update
-    scheduleStaffEmbedUpdate(client, guild.id, channelsConfig().staffChannelId);
-    
-    // Auto-update the rules embed
+    // Auto-update the rules embed once on ready
     await updateRulesEmbed(client, guild.id);
-    
-    // Schedule rules embed updates every 5 minutes
-    setInterval(async () => {
-      try {
-        await updateRulesEmbed(client, guild.id);
-      } catch (error) {
-        console.error('Error updating rules embed:', error);
-      }
-    }, 5 * 60 * 1000);
-    
-    // Schedule the periodic tag role sync
-    console.log('🔍 Calling scheduleTagRoleSync');
-    scheduleTagRoleSync(client, guild.id);
-    
-    // Schedule the periodic level role sync
-    console.log('🔍 Calling scheduleLevelRoleSync');
-    scheduleLevelRoleSync(client, guild.id);
-    console.log('📊 Stats, staff embed, tag sync, and level role sync systems initialized');
+
+    // Register scheduler jobs
+    const guildId = guild.id;
+    const statsChannelId = channelsConfig().statsChannelId;
+    const staffChannelId = channelsConfig().staffChannelId;
+
+    registerJob('stats.update', async () => {
+      await updateStats(client, guildId, statsChannelId);
+    }, 5 * 60 * 1000, { jitterMs: 30 * 1000, singleton: true });
+
+    registerJob('tag.sync', async () => {
+      const { syncTagRolesFromGuild } = await import('./features/tagSync/tagSyncService.js');
+      await syncTagRolesFromGuild(guild, client);
+    }, 5 * 60 * 1000, { jitterMs: 45 * 1000, singleton: true });
+
+    registerJob('levels.syncRoles', async () => {
+      await syncLevelRoles(guild);
+    }, 5 * 60 * 1000, { jitterMs: 60 * 1000, singleton: true });
+
+    registerJob('staff.embed', async () => {
+      await updateStaffEmbed(client, guildId, staffChannelId);
+    }, 5 * 60 * 1000, { jitterMs: 30 * 1000, singleton: true });
+
+    registerJob('rules.embed', async () => {
+      await updateRulesEmbed(client, guildId);
+    }, 5 * 60 * 1000, { jitterMs: 30 * 1000, singleton: true });
+
+    registerJob('birthdays.check', async () => {
+      await checkBirthdays(client);
+    }, 60 * 60 * 1000, { jitterMs: 5 * 60 * 1000, singleton: true });
+
+    registerJob('leveling.voiceTick', async () => {
+      await voiceTick(client);
+    }, 60 * 1000, { jitterMs: 10 * 1000, singleton: true });
+
+    const { startAll } = await import('./scheduler/index.js');
+    startAll();
+    logger.info('Scheduler jobs registered and started');
     
     // Start the cleanup service
-    console.log('🧹 Starting cleanup service');
+    logger.info('Starting cleanup service');
     const cleanupService = new CleanupService(client);
     cleanupService.start();
-    console.log('✅ Cleanup service initialized');
-    
-    // Schedule birthday checks every hour
-    console.log('🎂 Starting birthday check scheduler');
-    setInterval(async () => {
-      try {
-        await checkBirthdays(client);
-      } catch (error) {
-        console.error('Error in birthday check:', error);
-      }
-    }, 60 * 60 * 1000); // Check every hour
+    logger.info('Cleanup service initialized');
     
     // Initial birthday check
     await checkBirthdays(client);
     
     // Initialize giveaway system
-    console.log('🎁 Initializing giveaway system');
+    logger.info('Initializing giveaway system');
     try {
       const { default: GiveawayService } = await import('./features/giveaway/service.js');
       const giveawayService = new GiveawayService();
       await giveawayService.restoreOpenGiveawaysOnStartup(client);
-      console.log('✅ Giveaway system initialized');
+      logger.info('Giveaway system initialized');
     } catch (error) {
-      console.error('❌ Failed to initialize giveaway system:', error);
+      logger.error({ err: error }, 'Failed to initialize giveaway system');
     }
   } else {
-    console.error('❌ Could not find guild with ID:', GUILD_ID);
+    logger.error({ GUILD_ID }, 'Could not find guild with ID');
   }
   
   // Register commands dynamically based on roles

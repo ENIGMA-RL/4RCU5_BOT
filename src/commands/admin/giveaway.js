@@ -12,7 +12,7 @@ export const data = new SlashCommandBuilder()
 export const cooldown = 10;
 
 export async function execute(interaction) {
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
   const cfg = giveawayConfig();
   const ok = cfg.admin_role_ids.some(r => interaction.member.roles.cache.has(r));
   if (!ok) return interaction.editReply('❌ not allowed');

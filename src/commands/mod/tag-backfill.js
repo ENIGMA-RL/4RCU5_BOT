@@ -1,5 +1,6 @@
 import { EmbedBuilder } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { isAdmin } from '../../utils/permissions.js';
 import { syncExistingTagHoldersOnStartup } from '../../features/tagSync/tagSyncService.js';
 
 export const data = {
@@ -11,8 +12,7 @@ export const data = {
 
 export const execute = async (interaction) => {
 	// Admin-only check
-	const adminRoles = rolesConfig().adminRoles;
-	const hasPermission = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+	const hasPermission = isAdmin(interaction.member);
 	if (!hasPermission) {
 		await interaction.reply({ content: '❌ You do not have permission to use this command.', flags: 64 });
 		return;

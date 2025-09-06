@@ -1,5 +1,7 @@
 import { rolesConfig, channelsConfig } from '../../config/configLoader.js';
+import { isAdmin } from '../../utils/permissions.js';
 import { updateStats } from '../../features/stats/statsUpdater.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'refreshstats',
@@ -9,10 +11,9 @@ export const data = {
 };
 
 export const execute = async (interaction) => {
-  const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
+  const canAdmin = isAdmin(interaction.member);
 
-  if (!isAdmin) {
+  if (!canAdmin) {
     return interaction.reply({
       content: '🚫 You need admin permissions to use this command.',
       flags: 64,
@@ -50,7 +51,7 @@ export const execute = async (interaction) => {
     // console.log(`Stats refreshed manually by ${interaction.user.tag}`);
 
   } catch (error) {
-    console.error('Error refreshing server statistics:', error);
+    logger.error({ err: error }, 'Error refreshing server statistics');
     await interaction.editReply({
       content: '❌ Failed to refresh server statistics. Please check the console for errors.',
       flags: 64,

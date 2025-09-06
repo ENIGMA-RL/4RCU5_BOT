@@ -1,6 +1,8 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
-import { getAllUsers, markUserActive, markUserLeftServer } from '../../database/db.js';
+import { isAdmin } from '../../utils/permissions.js';
+import { getAllUsers, markUserActive, markUserLeftServer } from '../../repositories/usersAdminRepo.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
 	name: 'sync-active-members',
@@ -11,8 +13,7 @@ export const data = {
 
 export const execute = async (interaction) => {
 	// Admin-only check
-	const adminRoles = rolesConfig().adminRoles;
-	const hasPermission = interaction.member.roles.cache.some(role => adminRoles.includes(role.id));
+	const hasPermission = isAdmin(interaction.member);
 	if (!hasPermission) {
 		await interaction.reply({
 			content: '❌ You do not have permission to use this command.',
@@ -41,7 +42,7 @@ export const execute = async (interaction) => {
 					leftCount++;
 				}
 			} catch (error) {
-				console.error(`Error processing user ${user.user_id}:`, error);
+				logger.error({ err: error, userId: user.user_id }, 'Error processing user');
 				errorCount++;
 			}
 		}
@@ -62,7 +63,7 @@ export const execute = async (interaction) => {
 
 		await interaction.editReply({ embeds: [embed] });
 	} catch (error) {
-		console.error('Error in sync-active-members command:', error);
+		logger.error({ err: error }, 'Error in sync-active-members command');
 		try {
 			await interaction.editReply({ content: '❌ An error occurred while syncing activity status.' });
 		} catch {}

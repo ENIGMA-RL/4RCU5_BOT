@@ -1,22 +1,22 @@
 import { EmbedBuilder } from 'discord.js';
-import { logAction } from '../features/logger/logger.js';
 import { updateStats } from '../features/stats/statsUpdater.js';
 import { channelsConfig, rolesConfig } from '../config/configLoader.js';
 import { logMemberJoin, logRoleChange } from '../utils/botLogger.js';
-import { markUserActive } from '../database/db.js';
+import { markUserActive } from '../repositories/usersAdminRepo.js';
+import logger from '../utils/logger.js';
 
 export const name = 'guildMemberAdd';
 export const once = false;
 
 export const execute = async (member) => {
   try {
-    console.log(`👋 New member joined: ${member.user.tag} (${member.id})`);
+    logger.info(`New member joined: ${member.user.tag} (${member.id})`);
     
     // Mark user as active in database (rejoined server)
     markUserActive(member.id);
     
-    // Log the action
-    logAction(`New member joined: ${member.user.tag}`);
+    // Centralized logging
+    logger.info({ user: member.user.tag, userId: member.id }, 'Member joined');
     
     // Log member join
     await logMemberJoin(member.client, member.id, member.user.tag);
@@ -31,7 +31,7 @@ export const execute = async (member) => {
     const CNS_ROLE_ID = rolesConfig().cnsRole;
     try {
       await member.roles.add(CNS_ROLE_ID, 'New member CNS role');
-      console.log(`✅ Assigned CNS role to ${member.user.tag}`);
+      logger.info(`Assigned CNS role to ${member.user.tag}`);
       
       // Log the role assignment
       const cnsRole = member.guild.roles.cache.get(CNS_ROLE_ID);
@@ -39,13 +39,13 @@ export const execute = async (member) => {
         await logRoleChange(member.client, member.id, member.user.tag, 'Assigned', cnsRole.name, 'New member CNS role');
       }
     } catch (error) {
-      console.error(`❌ Error assigning CNS role to ${member.user.tag}:`, error);
+      logger.error({ err: error }, `Error assigning CNS role to ${member.user.tag}`);
     }
     
     // Update stats when a member joins
     await updateStats(member.client, member.guild.id, channelsConfig().statsChannelId);
     
   } catch (error) {
-    console.error('Error in guildMemberAdd event:', error);
+    logger.error({ err: error }, 'Error in guildMemberAdd event');
   }
 }; 

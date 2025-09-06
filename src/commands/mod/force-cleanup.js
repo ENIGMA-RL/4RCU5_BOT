@@ -1,5 +1,7 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { isAdmin } from '../../utils/permissions.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'force-cleanup',
@@ -10,8 +12,8 @@ export const data = {
 
 export const execute = async (interaction) => {
   // Admin-only check
-  const adminRoleId = rolesConfig().adminRoles[0]; // Use first admin role
-  if (!interaction.member.roles.cache.has(adminRoleId)) {
+  const hasPermission = isAdmin(interaction.member);
+  if (!hasPermission) {
     await interaction.reply({
       content: '❌ Only administrators can use this command.',
       flags: 64
@@ -22,10 +24,10 @@ export const execute = async (interaction) => {
   await interaction.deferReply({ flags: 64 });
 
   try {
-    console.log(`🔧 Force cleanup triggered by ${interaction.user.tag}`);
+    logger.info({ by: interaction.user.tag }, 'Force cleanup triggered');
     
     // Get all users from database
-    const { db } = await import('../../database/db.js');
+    const db = (await import('../../database/connection.js')).default;
     
     // Find and remove all suspicious users
     const suspiciousUsers = db.prepare(`
@@ -39,7 +41,7 @@ export const execute = async (interaction) => {
     let removedCount = 0;
     
     for (const user of suspiciousUsers) {
-      console.log(`🗑️ Force removing suspicious user: ${user.username} (${user.user_id})`);
+      logger.info(`Force removing suspicious user: ${user.username} (${user.user_id})`);
       const deleteStmt = db.prepare('DELETE FROM users WHERE user_id = ?');
       deleteStmt.run(user.user_id);
       removedCount++;
@@ -53,7 +55,7 @@ export const execute = async (interaction) => {
       try {
         await interaction.client.users.fetch(user.user_id);
       } catch (error) {
-        console.log(`🗑️ Force removing user due to fetch error: ${user.user_id}`);
+        logger.warn(`Force removing user due to fetch error: ${user.user_id}`);
         const deleteStmt = db.prepare('DELETE FROM users WHERE user_id = ?');
         deleteStmt.run(user.user_id);
         fetchErrors++;
@@ -75,10 +77,10 @@ export const execute = async (interaction) => {
 
     await interaction.editReply({ embeds: [embed] });
     
-    console.log(`✅ Force cleanup completed: ${totalRemoved} users removed`);
+    logger.info(`Force cleanup completed: ${totalRemoved} users removed`);
 
   } catch (error) {
-    console.error('Error during force cleanup:', error);
+    logger.error({ err: error }, 'Error during force cleanup');
     
     const errorEmbed = new EmbedBuilder()
       .setTitle('❌ Force Cleanup Failed')

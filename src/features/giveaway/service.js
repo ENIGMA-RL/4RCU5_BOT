@@ -1,6 +1,8 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { giveawayConfig } from '../../config/configLoader.js';
-import db, {
+import db from '../../database/connection.js';
+import { getRoleFirstSeen } from '../../repositories/tagRepo.js';
+import {
   createGiveawayRow,
   getGiveawayById,
   getOpenInChannel,
@@ -11,13 +13,51 @@ import db, {
   withdrawEntry,
   listActiveEntries,
   countActiveEntries,
-  getRoleFirstSeen
-} from '../../database/db.js';
+  setGiveawayImageUrl
+} from '../../repositories/giveawaysRepo.js';
+import logger from '../../utils/logger.js';
+
+// Parse duration strings like "10m", "2h", "1d" (also supports s)
+function parseDurationToMs(input) {
+  if (!input) return NaN;
+  const m = String(input).trim().match(/^(\d+)\s*(s|m|h|d)$/i);
+  if (!m) return NaN;
+  const n = parseInt(m[1], 10);
+  const unit = m[2].toLowerCase();
+  const mult = unit === 's' ? 1e3 : unit === 'm' ? 60e3 : unit === 'h' ? 3600e3 : 86400e3;
+  return n * mult;
+}
 
 class GiveawayService {
   constructor() {
     this.config = null;
     this.activeTimers = new Map();
+    this.inFlight = new Set();
+    if (!GiveawayService._shutdownHookRegistered) {
+      try {
+        const clearAll = () => {
+          try {
+            for (const [, t] of this.activeTimers) {
+              try { clearTimeout(t); } catch {}
+            }
+            this.activeTimers.clear();
+          } catch {}
+        };
+        process.once('SIGINT', clearAll);
+        process.once('SIGTERM', clearAll);
+      } catch {}
+      GiveawayService._shutdownHookRegistered = true;
+    }
+  }
+
+  async _withLock(giveawayId, fn) {
+    if (this.inFlight.has(giveawayId)) return;
+    this.inFlight.add(giveawayId);
+    try {
+      return await fn();
+    } finally {
+      this.inFlight.delete(giveawayId);
+    }
   }
 
   getConfig() {
@@ -27,24 +67,8 @@ class GiveawayService {
     return this.config;
   }
 
-  // Parse duration strings like 10m, 2h, 1d into milliseconds
-  parseDuration(durationStr) {
-    const match = durationStr.match(/^(\d+)([mhd])$/);
-    if (!match) return null;
-    
-    const value = parseInt(match[1]);
-    const unit = match[2];
-    
-    let multiplier;
-    switch (unit) {
-      case 'm': multiplier = 60 * 1000; break; // minutes in ms
-      case 'h': multiplier = 60 * 60 * 1000; break; // hours in ms
-      case 'd': multiplier = 24 * 60 * 60 * 1000; break; // days in ms
-      default: return null;
-    }
-    
-    return value * multiplier;
-  }
+  // parseDuration is deprecated; use parseDurationToMs
+  parseDuration() { return null; }
 
   // Check if user is a server booster
   isBooster(member) {
@@ -115,49 +139,41 @@ class GiveawayService {
     return pool[pool.length - 1].user_id;
   }
 
-  // Generate giveaway embed
+  // Generate giveaway embed (compact with thin dividers)
   generateEmbed(gv) {
     const colors = { open: 0x4ECDC4, closed: 0x45B7D1, drawn_unpublished: 0x96CEB4, published: 0xFFEAA7 };
-    const title = gv.status === 'published' ? '🎉 winner' : '🎁 Giveaway';
-    const embed = new EmbedBuilder()
-      .setTitle(title)
-      .setDescription(
-        gv.status === 'published'
-          ? `\n**<@${gv.published_winner_user_id}>**\n\n${gv.description}\n`
-          : `@everyone\n\n${gv.description}\n`
-      )
-      .setColor(colors[gv.status] ?? 0x4ECDC4);
+    const title = gv.status === 'published' ? '🎉 Winner' : '🎁 Giveaway';
+    const embed = new EmbedBuilder().setTitle(title).setColor(colors[gv.status] ?? 0x4ECDC4);
 
     const entries = countActiveEntries(gv.id);
-    
-    // Safe guard: if end_at < 10^12 treat as seconds and convert to ms inline
-    let endAt = gv.end_at;
-    if (endAt < 10**12) {
-      endAt = endAt * 1000; // Convert seconds to milliseconds
-    }
+    let endAt = gv.end_at < 1e12 ? gv.end_at * 1000 : gv.end_at;
     const endSec = Math.floor(endAt / 1000);
 
-    const eligibility = ['• CNS Member+ (lvl 3 and above)', '• Or CNS tag equiped for at least 30 days'].join('\n');
-    const oddsNote = 'Server boosters get +1 ticket (2× chance vs non-boosters)';
-    
-    // Add compact fields with light spacing between sections
-    embed.addFields(
-      { name: 'Signups Close', value: gv.status === 'open' ? `<t:${endSec}:f>` : 'closed', inline: true },
-      { name: 'Entries', value: `${entries}`, inline: true },
-      { name: '\u200B', value: '\u200B', inline: false },
-      { name: 'Eligibility', value: eligibility, inline: false },
-      { name: '\u200B', value: '\u200B', inline: false },
-      { name: 'Increase your chances', value: oddsNote, inline: false },
-      { name: '\u200B', value: '\u200B', inline: false },
-      { name: 'Winner', value: 
-        gv.status === 'published' ? `Congrats: <@${gv.published_winner_user_id}>!` 
-        : gv.status === 'drawn_unpublished' ? 'pending approval' 
-        : 'tbd', 
-        inline: false 
-      }
-    );
+    if (gv.status === 'published') {
+      embed.setDescription(`**<@${gv.published_winner_user_id}>**\n${gv.description}`);
+    } else {
+      embed.setDescription(`@everyone\n${gv.description}`);
+    }
 
-    // Note: Image is handled in refreshMessage to preserve attachment positioning
+    const divider = '┈┈┈┈┈';
+    const winner = gv.status === 'published' ? `Congrats: <@${gv.published_winner_user_id}>`
+      : gv.status === 'drawn_unpublished' ? 'Pending Approval'
+      : 't.b.d.';
+
+    const body = [
+      `**Signups Close:** <t:${endSec}:f>  **Entries:** ${entries}`,
+      divider,
+      '**Eligibility:**',
+      '• CNS Member+ (Lvl 3+)',
+      '• Or CNS Tag Equipped ≥ 30 Days',
+      divider,
+      '**Increase Your Chances:**',
+      'Server Boosters Get +1 Ticket',
+      divider,
+      `**Winner:** ${winner}`
+    ].join('\n');
+
+    embed.addFields({ name: '\u200a', value: body, inline: false });
     embed.setFooter({ text: 'press join to enter, withdraw to leave' });
     return embed;
   }
@@ -193,14 +209,16 @@ class GiveawayService {
         attachments
       });
     } catch (error) {
-      console.error('failed to refresh giveaway message:', error);
+      logger.error({ err: error }, 'failed to refresh giveaway message');
     }
   }
 
   // closed -> open (reopen signups)
   async openSignups({ giveawayId, client }) {
     const gv = getGiveawayById(giveawayId);
-    if (!gv || gv.status !== 'closed') throw new Error('not closed');
+    if (!gv) throw new Error('not found');
+    if (gv.status === 'open') return; // idempotent
+    if (gv.status !== 'closed') throw new Error('not closed');
     updateGiveaway(giveawayId, { status: 'open' });
     await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'open' }, client);
   }
@@ -208,15 +226,22 @@ class GiveawayService {
   // open -> closed
   async closeSignups({ giveawayId, client }) {
     const gv = getGiveawayById(giveawayId);
-    if (!gv || gv.status !== 'open') throw new Error('not open');
+    if (!gv) throw new Error('not found');
+    if (gv.status === 'closed') return; // idempotent
+    if (gv.status !== 'open') throw new Error('not open');
     updateGiveaway(giveawayId, { status: 'closed' });
     await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'closed' }, client);
+    this.clearTimer(giveawayId);
   }
 
   // closed -> drawn_unpublished
   async draw({ giveawayId, client }) {
-    const gv = getGiveawayById(giveawayId);
-    if (!gv || gv.status !== 'closed') throw new Error('not closed');
+    return this._withLock(giveawayId, async () => {
+      const gv = getGiveawayById(giveawayId);
+      if (!gv) throw new Error('not found');
+      if (gv.status === 'drawn_unpublished') return { pendingId: gv.pending_winner_user_id };
+      if (gv.status === 'published') return { pendingId: gv.published_winner_user_id };
+      if (gv.status !== 'closed') throw new Error('not closed');
     const entries = listActiveEntries(giveawayId);
 
     // Re-check eligibility at draw time to ensure fairness
@@ -238,22 +263,27 @@ class GiveawayService {
       const results = await Promise.all(checks);
       eligibleEntries = results.filter(Boolean);
     } catch (err) {
-      console.warn('draw(): eligibility re-check skipped due to error:', err?.message || err);
+      logger.warn({ err }, 'draw(): eligibility re-check skipped due to error');
     }
 
-    const pendingId = this.pickWeightedWinner(eligibleEntries);
-    if (!pendingId) throw new Error('no valid entries');
-    updateGiveaway(giveawayId, { status: 'drawn_unpublished', pendingWinnerUserId: pendingId });
-    await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'drawn_unpublished', pending_winner_user_id: pendingId }, client);
-    return { pendingId };
+      const pendingId = this.pickWeightedWinner(eligibleEntries);
+      if (!pendingId) throw new Error('no valid entries');
+      updateGiveaway(giveawayId, { status: 'drawn_unpublished', pendingWinnerUserId: pendingId });
+      await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'drawn_unpublished', pending_winner_user_id: pendingId }, client);
+      return { pendingId };
+    });
   }
 
   // drawn_unpublished -> published
   async publish({ giveawayId, client }) {
-    const gv = getGiveawayById(giveawayId);
-    if (!gv || gv.status !== 'drawn_unpublished' || !gv.pending_winner_user_id) throw new Error('no pending winner');
-    updateGiveaway(giveawayId, { status: 'published', publishedWinnerUserId: gv.pending_winner_user_id, pendingWinnerUserId: null });
-    await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'published', published_winner_user_id: gv.pending_winner_user_id, pending_winner_user_id: null }, client);
+    return this._withLock(giveawayId, async () => {
+      const gv = getGiveawayById(giveawayId);
+      if (!gv) throw new Error('not found');
+      if (gv.status === 'published') return;
+      if (gv.status !== 'drawn_unpublished' || !gv.pending_winner_user_id) throw new Error('no pending winner');
+      updateGiveaway(giveawayId, { status: 'published', publishedWinnerUserId: gv.pending_winner_user_id, pendingWinnerUserId: null });
+      await this.refreshMessage(gv.channel_id, gv.message_id, { ...gv, status: 'published', published_winner_user_id: gv.pending_winner_user_id, pending_winner_user_id: null }, client);
+    });
   }
 
   // Generate join/withdraw buttons
@@ -281,18 +311,23 @@ class GiveawayService {
       throw new Error('There is already an active giveaway in this channel. End it first.');
     }
     
-    // Parse duration
-    const durationMs = this.parseDuration(duration);
-    if (!durationMs) {
-      throw new Error('Invalid duration format. Use format like "10m", "2h", "1d"');
+    // Parse duration safely
+    const durationMs = parseDurationToMs(duration);
+    if (!Number.isFinite(durationMs) || durationMs <= 0) {
+      throw new Error('invalid duration. use like 10m, 2h, 1d');
     }
-    
-    // Calculate end time
-    const endAt = Date.now() + durationMs;
+    // Calculate end time (round up to next hour for consistency)
+    let endAt = Date.now() + durationMs;
+    const endDate = new Date(endAt);
+    endDate.setMinutes(0, 0, 0);
+    if (endDate.getTime() < endAt) {
+      endDate.setHours(endDate.getHours() + 1);
+    }
+    endAt = endDate.getTime();
     const giveawayId = `gw_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     
     // Create database row (initially without image_url)
-    createGiveawayRow(giveawayId, guildId, channelId, '', description, null, endAt, createdBy);
+    createGiveawayRow(giveawayId, guildId, channelId, null, description, null, endAt, createdBy);
     
     // Get channel and post embed
     const channel = await client.channels.fetch(channelId);
@@ -313,7 +348,7 @@ class GiveawayService {
     // If there was an attachment, capture its URL back into the row
     const imageUrl = sent.attachments.first()?.url ?? null;
     if (imageUrl) {
-      db.prepare(`UPDATE giveaways SET image_url = ? WHERE id = ?`).run(imageUrl, giveawayId);
+      setGiveawayImageUrl(giveawayId, imageUrl);
     }
     
     // Set timer to end giveaway
@@ -347,7 +382,7 @@ class GiveawayService {
       const message = await channel.messages.fetch(giveaway.message_id);
       await message.delete();
     } catch (error) {
-      console.error('Failed to delete giveaway message:', error);
+      logger.error({ err: error }, 'Failed to delete giveaway message');
     }
     
     // Delete from database
@@ -355,6 +390,7 @@ class GiveawayService {
     
     // Clear timer
     this.clearTimer(giveawayId);
+    this.inFlight.delete(giveawayId);
     
     return true;
   }
@@ -394,8 +430,10 @@ class GiveawayService {
   setEndTimer(giveawayId, endAt, client) {
     const ms = endAt - Date.now();
     const doClose = async () => {
-      try { await this.closeSignups({ giveawayId, client }); } catch (e) { console.error(e); }
+      try { await this.closeSignups({ giveawayId, client }); } catch (e) { /* ignore */ }
     };
+    // Always clear any existing timer first
+    this.clearTimer(giveawayId);
     if (ms <= 0) { doClose(); return; }
     const timer = setTimeout(doClose, ms);
     this.activeTimers.set(giveawayId, timer);
@@ -425,16 +463,18 @@ class GiveawayService {
         try {
           await this.closeSignups({ giveawayId: giveaway.id, client });
         } catch (error) {
-          console.error(`Failed to close overdue giveaway ${giveaway.id}:`, error);
+          logger.error({ err: error }, `Failed to close overdue giveaway ${giveaway.id}`);
         }
       } else {
         // Still active, set timer
-        this.setEndTimer(giveaway.id, giveaway.end_at, client);
-        restoredCount++;
+        if (!this.activeTimers.has(giveaway.id)) {
+          this.setEndTimer(giveaway.id, giveaway.end_at, client);
+          restoredCount++;
+        }
       }
     }
     
-    console.log(`✅ Restored ${restoredCount} open giveaways on startup`);
+    logger.info(`Restored ${restoredCount} open giveaways on startup`);
   }
 }
 

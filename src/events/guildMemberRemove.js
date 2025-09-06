@@ -2,7 +2,8 @@ import { EmbedBuilder } from 'discord.js';
 import { updateStats } from '../features/stats/statsUpdater.js';
 import { channelsConfig } from '../config/configLoader.js';
 import { logMemberLeave } from '../utils/botLogger.js';
-import { markUserLeftServer } from '../database/db.js';
+import { markUserLeftServer } from '../repositories/usersAdminRepo.js';
+import logger from '../utils/logger.js';
 
 export const name = 'guildMemberRemove';
 export const once = false;
@@ -23,6 +24,6 @@ export const execute = async (member) => {
     await updateStats(member.client, member.guild.id, channelsConfig().statsChannelId);
     
   } catch (error) {
-    console.error('Error in guildMemberRemove event:', error);
+    logger.error({ err: error }, 'Error in guildMemberRemove event');
   }
 }; 

@@ -1,5 +1,15 @@
 {
   "prefix": "/",
   "ownerID": "291218960471293953",
-  "botRole": "1245019955439599676"
+  "botRole": "1245019955439599676",
+  "presence": {
+    "status": "online",
+    "rotate": false,
+    "rotate_ms": 300000,
+    "default": "VAIIYA",
+    "activities": [
+      { "name": "VAIIYA", "type": 3 },
+      { "name": "/help", "type": 3 }
+    ]
+  }
 } 

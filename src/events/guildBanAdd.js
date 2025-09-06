@@ -1,4 +1,5 @@
-import { markUserLeftServer } from '../database/db.js';
+import { markUserLeftServer } from '../repositories/usersAdminRepo.js';
+import logger from '../utils/logger.js';
 
 export const once = false;
 
@@ -9,7 +10,7 @@ export const execute = async (ban) => {
 		if (!userId) return;
 		markUserLeftServer(userId);
 	} catch (error) {
-		console.error('Error in guildBanAdd event:', error);
+		logger.error({ err: error }, 'Error in guildBanAdd event');
 	}
 };
 

@@ -1,6 +1,8 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
-import { cleanupDeletedUsers } from '../../database/db.js';
+import { cleanupDeletedUsers } from '../../repositories/usersAdminRepo.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { isAdmin } from '../../utils/permissions.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'cleanup-database',
@@ -11,8 +13,7 @@ export const data = {
 
 export const execute = async (interaction) => {
   // Admin-only check
-  const adminRoleId = rolesConfig().adminRoles[0]; // Use first admin role
-  const hasPermission = interaction.member.roles.cache.has(adminRoleId);
+  const hasPermission = isAdmin(interaction.member);
   if (!hasPermission) {
     await interaction.reply({
       content: '❌ You do not have permission to use this command.',
@@ -24,7 +25,7 @@ export const execute = async (interaction) => {
   await interaction.deferReply({ flags: 64 });
 
   try {
-    console.log(`🔧 Manual cleanup triggered by ${interaction.user.tag}`);
+    // keep it quiet in production logs
     
     const result = await cleanupDeletedUsers(interaction.client);
     
@@ -41,7 +42,7 @@ export const execute = async (interaction) => {
     await interaction.editReply({ embeds: [embed] });
 
   } catch (error) {
-    console.error('Error during manual cleanup:', error);
+    logger.error({ err: error }, 'Error during manual cleanup');
     
     const errorEmbed = new EmbedBuilder()
       .setTitle('❌ Cleanup Failed')

@@ -1,4 +1,5 @@
 import { rolesConfig } from '../../config/configLoader.js';
+import { isAdmin } from '../../utils/permissions.js';
 import { ModalBuilder, TextInputBuilder, TextInputStyle, ActionRowBuilder } from 'discord.js';
 
 export const data = {
@@ -22,10 +23,9 @@ export const data = {
 };
 
 export const execute = async (interaction) => {
-  const memberRoles = interaction.member.roles.cache;
-  const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
+  const canAdmin = isAdmin(interaction.member);
 
-  if (!isAdmin) {
+  if (!canAdmin) {
     return interaction.reply({
       content: '🚫 You need admin permissions to use this command.',
       flags: 64,

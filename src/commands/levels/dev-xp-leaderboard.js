@@ -1,6 +1,8 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
 import { getTopUsersByType } from '../../features/leveling/levelingSystem.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { check as cdCheck, set as cdSet, formatRemaining as cdFormat } from '../../services/CooldownService.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'dev-xp-leaderboard',
@@ -40,11 +42,18 @@ export const execute = async (interaction) => {
   const allUserIds = users.map(u => u.user_id);
   
   // Batch fetch all users from Discord API (much faster than individual calls)
+  const res = cdCheck(interaction.member, 'dev-xp-leaderboard');
+  if (res.onCooldown) {
+    const remaining = cdFormat(res.remainingTime);
+    await interaction.reply({ content: `⏰ Try again in ${remaining}`, flags: 64 });
+    return;
+  }
   const discordUsers = await Promise.all(
     allUserIds.map(id => 
       interaction.client.users.fetch(id).catch(() => null)
     )
   );
+  cdSet(interaction.member, 'dev-xp-leaderboard');
   
   // Create a map for fast user lookup
   const userMap = new Map();
@@ -59,7 +68,7 @@ export const execute = async (interaction) => {
   for (const u of users) {
     const userObj = userMap.get(u.user_id);
     if (!userObj) {
-      console.log(`❌ Skipping deleted user: ${u.user_id}`);
+      logger.debug(`Skipping deleted user: ${u.user_id}`);
       continue;
     }
     
@@ -70,9 +79,9 @@ export const execute = async (interaction) => {
     // Only include users who are currently in the server
     if (isInServer) {
       userInfos.push({ ...u, username: userObj.username, isInServer: true });
-      console.log(`✅ User: ${userObj.username} (${u.user_id}) - In server: ${isInServer}`);
+      logger.debug(`User: ${userObj.username} (${u.user_id}) - In server: ${isInServer}`);
     } else {
-      console.log(`🚪 Skipping user who left server: ${userObj.username} (${u.user_id})`);
+      logger.debug(`Skipping user who left server: ${userObj.username} (${u.user_id})`);
     }
   }
   

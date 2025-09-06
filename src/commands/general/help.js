@@ -1,5 +1,7 @@
 import { EmbedBuilder, ApplicationCommandOptionType } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
+import { isAdmin, isMod, hasStaff } from '../../utils/permissions.js';
+import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'help',
@@ -11,13 +13,11 @@ export const data = {
 export const execute = async (interaction) => {
   try {
     const memberRoles = interaction.member.roles.cache;
-    
     const hasModRole = rolesConfig().sayCommandRoles.some(role => memberRoles.has(role));
-    
-    // Check specific roles for different permission levels using config
-    const isAdmin = rolesConfig().adminRoles.some(roleId => memberRoles.has(roleId));
-    const isMod = rolesConfig().modRoles.some(roleId => memberRoles.has(roleId));
-    const isHelper = memberRoles.has(rolesConfig().helperRole);
+    const adminOk = isAdmin(interaction.member);
+    const modOk = isMod(interaction.member);
+    const helperId = rolesConfig().helperRole;
+    const isHelper = helperId ? memberRoles.has(helperId) : false;
     
     // Create embed based on user's role level
     const embed = new EmbedBuilder()
@@ -67,7 +67,7 @@ export const execute = async (interaction) => {
 
 
     // Moderation Commands (only for staff members)
-    if (hasModRole) {
+    if (modOk) {
       const modCommands = [
         { name: '/kick', description: 'Kick a user (format: @username reason)' },
         { name: '/ban', description: 'Ban a user (format: @username reason)' },
@@ -86,7 +86,7 @@ export const execute = async (interaction) => {
     }
 
     // Admin Commands
-    if (isAdmin) {
+    if (adminOk) {
       embed.addFields({
         name: '🛡️ Admin Commands',
         value: [
@@ -136,9 +136,9 @@ export const execute = async (interaction) => {
     // Set description based on user's role level
     if (isDev) {
       embed.setDescription('**🛠️ Developer Access** - You have access to all developer, admin, and moderation commands.');
-    } else if (isAdmin) {
+    } else if (adminOk) {
       embed.setDescription('**👑 Admin Access** - You have access to all commands including full moderation and staff tools.');
-    } else if (isMod) {
+    } else if (modOk) {
       embed.setDescription('**⚡ Moderator Access** - You have access to moderation commands and staff tools.');
     } else if (isHelper) {
       embed.setDescription('**🤝 Helper Access** - You have access to basic staff commands and moderation tools.');
@@ -161,7 +161,7 @@ export const execute = async (interaction) => {
     });
 
   } catch (error) {
-    console.error('Error in help command:', error);
+    logger.error({ err: error }, 'Error in help command');
     await interaction.reply({
       content: '❌ An error occurred while generating the help menu.',
       flags: 64

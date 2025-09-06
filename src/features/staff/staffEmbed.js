@@ -1,41 +1,42 @@
 import { EmbedBuilder, ActionRowBuilder, ButtonBuilder, ButtonStyle } from 'discord.js';
 import { staffConfig, rolesConfig, channelsConfig } from '../../config/configLoader.js';
 import { TicketManager } from '../tickets/ticketManager.js';
+import logger from '../../utils/logger.js';
 
 export async function updateStaffEmbed(client, guildId, channelId) {
   let guild, channel;
-  console.log(`[StaffEmbed] Attempting to update staff embed for guildId: ${guildId}, channelId: ${channelId}`);
+  logger.debug(`[StaffEmbed] Attempting to update staff embed for guildId: ${guildId}, channelId: ${channelId}`);
   try {
     guild = await client.guilds.fetch(guildId);
     if (!guild) {
-      console.error('[StaffEmbed] Guild not found for staff embed update.');
+      logger.error('[StaffEmbed] Guild not found for staff embed update.');
       return;
     }
-    console.log(`[StaffEmbed] Fetched guild: ${guild.name} (${guild.id})`);
+    logger.debug(`[StaffEmbed] Fetched guild: ${guild.name} (${guild.id})`);
     // Log all channel IDs in the guild
     const allChannels = await guild.channels.fetch();
     const channelIds = Array.from(allChannels.values()).map(c => `${c.name} (${c.id}) [type: ${c.type}]`);
-    console.log(`[StaffEmbed] Guild channels:`, channelIds);
+    logger.trace({ channelIds }, '[StaffEmbed] Guild channels');
     await guild.members.fetch();
     channel = await guild.channels.fetch(channelId).catch(e => {
-      console.error(`[StaffEmbed] Error fetching channel: ${e}`);
+      logger.error({ err: e }, '[StaffEmbed] Error fetching channel');
       return null;
     });
     if (!channel) {
-      console.error(`[StaffEmbed] Staff channel not found for ID: ${channelId}`);
+      logger.error(`[StaffEmbed] Staff channel not found for ID: ${channelId}`);
       return;
     }
-    console.log(`[StaffEmbed] Fetched channel: ${channel.name} (${channel.id}), type: ${channel.type}`);
+    logger.debug(`[StaffEmbed] Fetched channel: ${channel.name} (${channel.id}), type: ${channel.type}`);
     if (!channel.isTextBased()) {
-      console.error('[StaffEmbed] Staff channel is not a text channel.');
+      logger.error('[StaffEmbed] Staff channel is not a text channel.');
       return;
     }
     if (channel.guildId !== guildId) {
-      console.error(`[StaffEmbed] Channel's guildId (${channel.guildId}) does not match expected guildId (${guildId})`);
+      logger.error(`[StaffEmbed] Channel's guildId (${channel.guildId}) does not match expected guildId (${guildId})`);
       return;
     }
   } catch (error) {
-    console.error('[StaffEmbed] Error fetching guild or channel for staff embed:', error);
+    logger.error({ err: error }, '[StaffEmbed] Error fetching guild or channel for staff embed');
     return;
   }
 
@@ -49,7 +50,7 @@ export async function updateStaffEmbed(client, guildId, channelId) {
     for (const roleConfig of staffConfig().staffRoles) {
       const role = await guild.roles.fetch(roleConfig.id);
       if (!role) {
-        console.error(`Staff role ${roleConfig.id} not found.`);
+        logger.error(`Staff role ${roleConfig.id} not found.`);
         continue;
       }
       const members = role.members;
@@ -104,7 +105,7 @@ export async function updateStaffEmbed(client, guildId, channelId) {
       await channel.send({ embeds: [embed], components: [ticketButton] });
     }
   } catch (error) {
-    console.error('Error updating staff embed:', error);
+    logger.error({ err: error }, 'Error updating staff embed');
   }
 }
 
@@ -112,7 +113,7 @@ export async function refreshStaffEmbed(client) {
   // Get the guild ID from the client's guilds
   const guild = client.guilds.cache.first();
   if (!guild) {
-    console.error('[StaffEmbed] No guilds available for refresh');
+    logger.error('[StaffEmbed] No guilds available for refresh');
     return;
   }
   const guildId = guild.id;
@@ -121,18 +122,18 @@ export async function refreshStaffEmbed(client) {
 }
 
 export function scheduleStaffEmbedUpdate(client, guildId, channelId) {
-  console.log('📋 Scheduling staff embed updates every 5 minutes');
+  logger.info('Scheduling staff embed updates every 5 minutes');
   setInterval(async () => {
     try {
-      console.log('📋 Updating staff embed...');
+      logger.debug('Updating staff embed...');
       await updateStaffEmbed(client, guildId, channelId);
-      console.log('✅ Staff embed updated successfully');
+      logger.debug('Staff embed updated successfully');
     } catch (error) {
-      console.error('❌ Error in scheduled staff embed update:', error);
+      logger.error({ err: error }, 'Error in scheduled staff embed update');
     }
   }, 5 * 60 * 1000);
 
   // Initial update
-  console.log('📋 Running initial staff embed update...');
+  logger.debug('Running initial staff embed update...');
   updateStaffEmbed(client, guildId, channelId);
 }

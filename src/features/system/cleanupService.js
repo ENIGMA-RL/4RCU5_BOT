@@ -1,4 +1,5 @@
-import { cleanupDeletedUsers } from '../../database/db.js';
+import { cleanupDeletedUsers } from '../../repositories/usersAdminRepo.js';
+import logger from '../../utils/logger.js';
 
 class CleanupService {
   constructor(client) {
@@ -8,7 +9,7 @@ class CleanupService {
   }
 
   start() {
-    console.log('🚀 Starting cleanup service...');
+    logger.info('Starting cleanup service...');
     
     // Run cleanup immediately
     this.runCleanup();
@@ -18,31 +19,31 @@ class CleanupService {
       this.runCleanup();
     }, 24 * 60 * 60 * 1000); // 24 hours in milliseconds
     
-    console.log('✅ Cleanup service started - will run daily');
+    logger.info('Cleanup service started - will run daily');
   }
 
   stop() {
     if (this.cleanupInterval) {
       clearInterval(this.cleanupInterval);
       this.cleanupInterval = null;
-      console.log('🛑 Cleanup service stopped');
+      logger.info('Cleanup service stopped');
     }
   }
 
   async runCleanup() {
     if (this.isRunning) {
-      console.log('⚠️ Cleanup already running, skipping...');
+      logger.debug('Cleanup already running, skipping...');
       return;
     }
 
     this.isRunning = true;
-    console.log('🧹 Running scheduled cleanup...');
+    logger.info('Running scheduled cleanup...');
     
     try {
       const result = await cleanupDeletedUsers(this.client);
-      console.log(`✅ Scheduled cleanup completed: ${result.deletedCount} deleted users removed, ${result.leftServerCount} users marked as left server`);
+      logger.info(`Scheduled cleanup completed: ${result.deletedCount} deleted users removed, ${result.leftServerCount} users marked as left server`);
     } catch (error) {
-      console.error('❌ Error during scheduled cleanup:', error);
+      logger.error({ err: error }, 'Error during scheduled cleanup');
     } finally {
       this.isRunning = false;
     }
@@ -50,7 +51,7 @@ class CleanupService {
 
   // Manual cleanup trigger
   async triggerCleanup() {
-    console.log('🔧 Manual cleanup triggered...');
+    logger.info('Manual cleanup triggered...');
     await this.runCleanup();
   }
 }
