@@ -1,36 +1,22 @@
 import logger from '../utils/logger.js';
 import { fetchWithBackoff } from '../utils/fetchWithBackoff.js';
 
-function buildXTrack() {
-  try {
-    const payload = {
-      os: 'Windows',
-      browser: 'Chrome',
-      release_channel: 'stable',
-      client_version: '1.0.0',
-      client_build_number: 999999,
-      client_event_source: null
-    };
-    return Buffer.from(JSON.stringify(payload)).toString('base64');
-  } catch {}
-  return 'e30=';
-}
-
-export async function fetchUserPrimaryGuild(userId, guildId) {
+export async function fetchUserPrimaryGuild(userId, _guildId, opts = {}) {
   const token = process.env.bot_token || process.env.BOT_TOKEN || process.env.DISCORD_TOKEN;
   if (!token) throw new Error('bot_token missing');
-  const url = `https://discord.com/api/v10/users/${userId}/profile?with_mutual_guilds=true&guild_id=${guildId}`;
+  const { accessToken } = opts || {};
+
   const res = await fetchWithBackoff(
-    url,
+    accessToken ? `https://discord.com/api/users/@me` : `https://discord.com/api/users/${userId}`,
     {
       method: 'GET',
       headers: {
-        authorization: `Bot ${token}`,
-        'x-track': buildXTrack(),
+        authorization: accessToken ? `Bearer ${accessToken}` : `Bot ${token}`,
+        'x-track': '1',
         'user-agent': 'discordbot'
       }
     },
-    { name: 'discord:profile' }
+    { name: accessToken ? 'discord:getMe' : 'discord:getUser' }
   );
   if (!res.ok) {
     const txt = await res.text().catch(() => '');
