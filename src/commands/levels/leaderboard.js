@@ -1,3 +1,4 @@
+import db from '../../database/connection.js';
 import { createCanvas, loadImage, registerFont } from 'canvas';
 import { getTopUsersByType } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
@@ -24,6 +25,71 @@ function getCachedMember(userId) {
   }
   return null;
 }
+
+// -- helpers voor fetchen en pagineren met overslaan van vertrokken leden --
+
+async function fetchMemberSafe(guild, userId) {
+  // probeert cache eerst; faalt alleen hard als user écht niet (meer) in de guild zit
+  try {
+    const cached = guild.members.cache.get(userId);
+    if (cached) return cached;
+    return await guild.members.fetch(userId);
+  } catch (e) {
+    const code = e?.code || e?.rawError?.code;
+    // 10007 = Unknown Member (weg uit guild). Alles anders behandelen we als tijdelijk probleem.
+    if (code === 10007 || String(e?.message || '').toLowerCase().includes('unknown member')) return null;
+    // transient error -> laat als "niet-zeker", maar we skippen voor zekerheid.
+    return null;
+  }
+}
+
+
+async function collectEligibleForPage(sortedUsers, guild, page, pageSize) {
+  const offset = (page - 1) * pageSize;
+  const need = offset + pageSize;
+
+  const picked = [];
+  const userMap = new Map();
+
+  for (const u of sortedUsers) {
+
+    if (u.left_server === 1) continue;
+
+    const m = await fetchMemberSafe(guild, u.user_id);
+    if (!m) continue; 
+
+    picked.push(u);
+    userMap.set(u.user_id, m);
+
+    if (picked.length >= need) break;
+  }
+
+  const pageUsers = picked.slice(offset, offset + pageSize);
+  return { pageUsers, userMap };
+}
+
+function processTextUsersPage(pageUsers, userMap) {
+  return pageUsers.map(u => {
+    const m = userMap.get(u.user_id);
+    return {
+      ...u,
+      username: m.displayName || m.user.username,
+      avatarURL: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
+    };
+  });
+}
+
+function processVoiceUsersPage(pageUsers, userMap) {
+  return pageUsers.map(u => {
+    const m = userMap.get(u.user_id);
+    return {
+      ...u,
+      username: m.displayName || m.user.username,
+      avatarURL: m.user.displayAvatarURL({ extension: 'png', size: 128 }),
+    };
+  });
+}
+
 
 // Helper function to cache user data
 function cacheMember(userId, member) {

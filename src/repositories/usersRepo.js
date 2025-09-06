@@ -65,3 +65,33 @@ export function toggleLevelUpNotifications(userId) {
 }
 
 
+// Centralized flag management
+export function markUserLeft(userId) {
+  return db.prepare(`
+    UPDATE users
+    SET left_server = 1,
+        updated_at  = strftime('%s','now')
+    WHERE user_id = ? AND COALESCE(left_server,0) = 0
+  `).run(userId);
+}
+
+export function markUserActive(userId, username = null, avatar = null) {
+  return db.prepare(`
+    UPDATE users
+       SET left_server = CASE WHEN COALESCE(left_server,0)=1 THEN 0 ELSE left_server END,
+           username    = COALESCE(?, username),
+           avatar      = COALESCE(?, avatar),
+           updated_at  = strftime('%s','now')
+     WHERE user_id = ?
+  `).run(username, avatar, userId);
+}
+
+// Whitelist helpers for safe left_server reset during real join events
+export function allowLeftReset(userId) {
+  return db.prepare('INSERT OR IGNORE INTO allow_left_reset(user_id) VALUES (?)').run(userId);
+}
+
+export function clearLeftReset(userId) {
+  return db.prepare('DELETE FROM allow_left_reset WHERE user_id = ?').run(userId);
+}
+

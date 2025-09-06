@@ -2,7 +2,7 @@ import { EmbedBuilder } from 'discord.js';
 import { updateStats } from '../features/stats/statsUpdater.js';
 import { channelsConfig } from '../config/configLoader.js';
 import { logMemberLeave } from '../utils/botLogger.js';
-import { markUserLeftServer } from '../repositories/usersAdminRepo.js';
+import { markUserLeft } from '../repositories/usersRepo.js';
 import logger from '../utils/logger.js';
 
 export const name = 'guildMemberRemove';
@@ -13,10 +13,10 @@ export const execute = async (member) => {
     const username = member.user.username;
     const userTag = member.user.tag;
     
-    console.log(`👋 Member left: ${userTag} (${member.id})`);
+    logger.info(`👋 Member left: ${userTag} (${member.id})`);
     
     // Mark user as left server in database
-    markUserLeftServer(member.id);
+    markUserLeft(member.id);
     
     await logMemberLeave(member.client, member.id, username);
     

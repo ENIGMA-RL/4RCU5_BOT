@@ -2,7 +2,7 @@ import { EmbedBuilder } from 'discord.js';
 import { updateStats } from '../features/stats/statsUpdater.js';
 import { channelsConfig, rolesConfig } from '../config/configLoader.js';
 import { logMemberJoin, logRoleChange } from '../utils/botLogger.js';
-import { markUserActive } from '../repositories/usersAdminRepo.js';
+import { markUserActive, allowLeftReset, clearLeftReset } from '../repositories/usersRepo.js';
 import logger from '../utils/logger.js';
 
 export const name = 'guildMemberAdd';
@@ -12,8 +12,19 @@ export const execute = async (member) => {
   try {
     logger.info(`New member joined: ${member.user.tag} (${member.id})`);
     
-    // Mark user as active in database (rejoined server)
-    markUserActive(member.id);
+    // Safely allow left_server reset for this join and update flags
+    try {
+      allowLeftReset(member.id);
+      markUserActive(
+        member.id,
+        member.user?.username ?? null,
+        member.user?.displayAvatarURL?.({ extension: 'png' }) ?? null
+      );
+    } catch (e) {
+      logger.error({ err: e }, 'Failed to mark user active on join');
+    } finally {
+      try { clearLeftReset(member.id); } catch {}
+    }
     
     // Centralized logging
     logger.info({ user: member.user.tag, userId: member.id }, 'Member joined');
