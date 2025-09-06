@@ -6,6 +6,7 @@ import { logTagSync } from '../../utils/botLogger.js';
 import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild, isCnsTagCurrentlyEquipped, syncExistingTagHolders } from '../../repositories/tagRepo.js';
 import logger from '../../utils/logger.js';
 import { botTokenHasTag, oauthHasTag } from './strategy.js';
+import { fetchRoleHolders } from '../../utils/discordHelpers.js';
 
 // Global backoff and simple cache to reduce rate limit hits
 let globalRateLimitedUntil = 0;
@@ -415,6 +416,36 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
   }
 
   return { count, updated, removed };
+}
+
+// Mirror tags based on a source guild role → destination CNS role (robust fallback)
+export async function mirrorFromSourceRole(client) {
+  const roles = rolesConfig();
+  const SRC_GUILD_ID = roles.tagSourceGuildId ?? roles.tagGuildId;
+  const SRC_ROLE_ID  = roles.tagSourceRoleId ?? roles.cnsOfficialRole;
+  const DST_GUILD_ID = process.env.GUILD_ID;
+  const DST_ROLE_ID  = roles.cnsOfficialRole;
+
+  const srcGuild = await client.guilds.fetch(SRC_GUILD_ID).catch(() => null);
+  const dstGuild = await client.guilds.fetch(DST_GUILD_ID).catch(() => null);
+  if (!srcGuild || !dstGuild) return { count: 0, updated: 0, removed: 0 };
+
+  const srcHolders = await fetchRoleHolders(srcGuild, SRC_ROLE_ID);
+  const dstMembers = await dstGuild.members.fetch();
+  const srcIds = new Set([...srcHolders.keys()]);
+
+  let added = 0, removed = 0;
+  for (const [, m] of dstMembers) {
+    const shouldHave = srcIds.has(m.id);
+    const hasDst = m.roles.cache.has(DST_ROLE_ID);
+    if (shouldHave && !hasDst) { try { await m.roles.add(DST_ROLE_ID, 'mirror tag from source guild'); added++; } catch {} }
+  }
+  for (const [, m] of dstMembers) {
+    const shouldHave = srcIds.has(m.id);
+    const hasDst = m.roles.cache.has(DST_ROLE_ID);
+    if (hasDst && !shouldHave) { try { await m.roles.remove(DST_ROLE_ID, 'mirror tag removed in source guild'); removed++; } catch {} }
+  }
+  return { count: srcIds.size, updated: added, removed };
 }
 
 /**
