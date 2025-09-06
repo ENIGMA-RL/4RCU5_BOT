@@ -9,8 +9,12 @@ import { botTokenHasTag, oauthHasTag } from './strategy.js';
 
 // Global backoff and simple cache to reduce rate limit hits
 let globalRateLimitedUntil = 0;
-const TAG_STATUS_TTL_MS = Number(process.env.TAG_STATUS_TTL_MS || 6 * 60 * 60 * 1000); // 6h default
+export const TAG_STATUS_TTL_MS = Number(process.env.TAG_STATUS_TTL_MS ?? 1_000); // default 15s
 const tagStatusCache = new Map(); // userId -> { at: number, result }
+
+export function clearTagStatusCache(userId) {
+  if (userId) tagStatusCache.delete(userId); else tagStatusCache.clear();
+}
 
 export function isGloballyRateLimited() {
   return Date.now() < globalRateLimitedUntil;
@@ -38,10 +42,12 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
     if (isGloballyRateLimited()) {
       throw new Error('Rate limited: global backoff active');
     }
-    // Cache short-circuits frequent checks
-    const cached = tagStatusCache.get(userId);
-    if (cached && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
-      return cached.result;
+    const forceRefresh = !!opts.forceRefresh;
+    if (!forceRefresh) {
+      const cached = tagStatusCache.get(userId);
+      if (cached && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
+        return cached.result;
+      }
     }
     const useOauth = opts.strategy === 'oauth' && opts.accessToken;
     const fetchRes = useOauth
@@ -94,7 +100,7 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
  * @param {Client} client - The Discord client
  * @returns {Promise<{success: boolean, action?: string, user?: string, reason?: string, error?: string}>}
  */
-export async function syncUserTagRole(userId, guild, client) {
+export async function syncUserTagRole(userId, guild, client, opts = {}) {
   try {
     if (isGloballyRateLimited()) {
       return { success: false, error: 'rate_limited' };
@@ -111,7 +117,9 @@ export async function syncUserTagRole(userId, guild, client) {
     const tagStatus = await checkUserTagStatus(
       userId,
       client,
-      strategy === 'oauth' ? { strategy: 'oauth', accessToken: null } : {}
+      strategy === 'oauth'
+        ? { strategy: 'oauth', accessToken: null, forceRefresh: !!opts.forceRefresh }
+        : { forceRefresh: !!opts.forceRefresh }
     );
     
     // Get the member object
@@ -139,6 +147,8 @@ export async function syncUserTagRole(userId, guild, client) {
           await logTagSync(guild.client, member.id, member.user.tag, 'Added', 'Server tag enabled');
         }
         
+        // keep cache truthful
+        tagStatusCache.set(userId, { at: Date.now(), result: { userId, isUsingTag: true, tagData: tagStatus.tagData, userData: tagStatus.userData } });
         return { 
           success: true, 
           action: 'added', 
@@ -169,6 +179,7 @@ export async function syncUserTagRole(userId, guild, client) {
           await logTagSync(guild.client, member.id, member.user.tag, 'Removed', 'Server tag disabled');
         }
         
+        tagStatusCache.set(userId, { at: Date.now(), result: { userId, isUsingTag: false, tagData: tagStatus.tagData, userData: tagStatus.userData } });
         return { 
           success: true, 
           action: 'removed', 

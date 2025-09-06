@@ -42,12 +42,11 @@ export async function execute(oldMember, newMember) {
       try { await logTagSync(newMember.client, newMember.id, newMember.user.tag, 'Removed', 'Role removed via member update'); } catch {}
     }
 
-    // Keep async tag status verification, but lower priority
+    // Immediate verification with cache bypass, then follow-up once for propagation
+    try { await syncUserTagRole(newMember.id, newMember.guild, newMember.client, { forceRefresh: true }); } catch {}
     setTimeout(async () => {
-      try {
-        await syncUserTagRole(newMember.id, newMember.guild, newMember.client);
-      } catch {}
-    }, 3000);
+      try { await syncUserTagRole(newMember.id, newMember.guild, newMember.client, { forceRefresh: true }); } catch {}
+    }, 1500);
     
     // Check if any staff roles were added or removed
     const oldRoles = oldMember.roles.cache;

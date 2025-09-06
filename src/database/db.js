@@ -39,6 +39,12 @@ function initializeDatabase() {
     if (!names.has('voice_time')) {
       db.exec("ALTER TABLE users ADD COLUMN voice_time INTEGER DEFAULT 0");
     }
+    if (!names.has('avatar')) {
+      db.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
+    }
+    if (!names.has('left_server')) {
+      db.exec("ALTER TABLE users ADD COLUMN left_server BOOLEAN DEFAULT 0");
+    }
   } catch (e) {
     logger.warn('Warning applying users table migrations:', e.message);
   }
