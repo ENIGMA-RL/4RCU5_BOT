@@ -143,9 +143,11 @@ export const execute = async (oldState, newState) => {
         logger.debug(`[JoinToCreate] ${member.user.tag} is voice-stable! Creating channel and moving...`);
 
         try {
-          // Create the channel with just the username (no icon)
+          // Create the channel using server display name (nickname preferred)
+          const display = member.displayName || member.user.username;
+          const safeName = display.replace(/[^\p{L}\p{N}\s'_\-]/gu, '');
           const newChannel = await guild.channels.create({
-            name: `${member.user.username}'s Channel`,
+            name: `${safeName}'s Channel`,
             type: 2, // GUILD_VOICE
             parent: channelsConfig().voiceCategoryId,
             permissionOverwrites: [
