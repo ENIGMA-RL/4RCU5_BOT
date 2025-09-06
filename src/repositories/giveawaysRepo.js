@@ -1,4 +1,3 @@
-cat > /root/4RCU5_BOT/src/repositories/giveawaysRepo.js <<'JS'
 import db from '../database/connection.js';
 import logger from '../utils/logger.js';
 
@@ -33,29 +32,35 @@ function ensureGiveawaysSchema() {
     const have = new Set(cols.map(c => c.name));
 
     // 3) Missende kolommen voorzichtig toevoegen (zonder NOT NULL afdwingen in ALTER)
-    const addCol = (sql) => { try { db.exec(sql); logger.warn(`[GiveawaysSchema] Added missing column via: ${sql}`); } catch (e) { logger.error({ err: e }, `[GiveawaysSchema] Failed to add column: ${sql}`); } };
+    const addCol = (sql) => {
+      try {
+        db.exec(sql);
+        logger.warn(`[GiveawaysSchema] Added missing column via: ${sql}`);
+      } catch (e) {
+        logger.error({ err: e }, `[GiveawaysSchema] Failed to add column: ${sql}`);
+      }
+    };
 
-    if (!have.has('message_id'))              addCol(`ALTER TABLE giveaways ADD COLUMN message_id TEXT;`);
-    if (!have.has('image_url'))               addCol(`ALTER TABLE giveaways ADD COLUMN image_url TEXT;`);
-    if (!have.has('pending_winner_user_id'))  addCol(`ALTER TABLE giveaways ADD COLUMN pending_winner_user_id TEXT;`);
-    if (!have.has('published_winner_user_id'))addCol(`ALTER TABLE giveaways ADD COLUMN published_winner_user_id TEXT;`);
-    if (!have.has('created_by'))              addCol(`ALTER TABLE giveaways ADD COLUMN created_by TEXT;`);
-    if (!have.has('created_at'))              addCol(`ALTER TABLE giveaways ADD COLUMN created_at INTEGER;`);
-    if (!have.has('status'))                  addCol(`ALTER TABLE giveaways ADD COLUMN status TEXT;`);
-    if (!have.has('end_at'))                  addCol(`ALTER TABLE giveaways ADD COLUMN end_at INTEGER;`);
-    if (!have.has('guild_id'))                addCol(`ALTER TABLE giveaways ADD COLUMN guild_id TEXT;`);
-    if (!have.has('channel_id'))              addCol(`ALTER TABLE giveaways ADD COLUMN channel_id TEXT;`);
+    if (!have.has('message_id'))               addCol(`ALTER TABLE giveaways ADD COLUMN message_id TEXT;`);
+    if (!have.has('image_url'))                addCol(`ALTER TABLE giveaways ADD COLUMN image_url TEXT;`);
+    if (!have.has('pending_winner_user_id'))   addCol(`ALTER TABLE giveaways ADD COLUMN pending_winner_user_id TEXT;`);
+    if (!have.has('published_winner_user_id')) addCol(`ALTER TABLE giveaways ADD COLUMN published_winner_user_id TEXT;`);
+    if (!have.has('created_by'))               addCol(`ALTER TABLE giveaways ADD COLUMN created_by TEXT;`);
+    if (!have.has('created_at'))               addCol(`ALTER TABLE giveaways ADD COLUMN created_at INTEGER;`);
+    if (!have.has('status'))                   addCol(`ALTER TABLE giveaways ADD COLUMN status TEXT;`);
+    if (!have.has('end_at'))                   addCol(`ALTER TABLE giveaways ADD COLUMN end_at INTEGER;`);
+    if (!have.has('guild_id'))                 addCol(`ALTER TABLE giveaways ADD COLUMN guild_id TEXT;`);
+    if (!have.has('channel_id'))               addCol(`ALTER TABLE giveaways ADD COLUMN channel_id TEXT;`);
 
-    // 4) Eventueel defaults invullen voor kritieke velden die nu NULL kunnen zijn
-    //    (doet niets kapot; voert geen deletes uit)
+    // 4) Defaults invullen voor kritieke velden
     db.exec(`
       UPDATE giveaways
       SET
-        status     = COALESCE(status, 'open'),
-        description= COALESCE(description, ''),
-        created_by = COALESCE(created_by, ''),
-        created_at = COALESCE(created_at, strftime('%s','now')*1000),
-        end_at     = COALESCE(end_at, strftime('%s','now')*1000)
+        status      = COALESCE(status, 'open'),
+        description = COALESCE(description, ''),
+        created_by  = COALESCE(created_by, ''),
+        created_at  = COALESCE(created_at, strftime('%s','now')*1000),
+        end_at      = COALESCE(end_at, strftime('%s','now')*1000)
       WHERE status IS NULL
          OR description IS NULL
          OR created_by IS NULL
@@ -67,7 +72,12 @@ function ensureGiveawaysSchema() {
   }
 }
 
-ensureGiveawaysSchema();
+// === Env-guard voor stap 4B ===
+if (process.env.SKIP_GIVEAWAYS_MIGRATION === '1') {
+  logger.warn('Skipping giveaways schema migration (env flag set)');
+} else {
+  ensureGiveawaysSchema();
+}
 
 /* === Data-access functies === */
 
@@ -134,10 +144,10 @@ export function getToRestore() {
 export function updateGiveaway(id, fields) {
   const sets = [];
   const vals = [];
-  if ('messageId' in fields) { sets.push('message_id = ?'); vals.push(fields.messageId); }
-  if ('status' in fields) { sets.push('status = ?'); vals.push(fields.status); }
-  if ('pendingWinnerUserId' in fields) { sets.push('pending_winner_user_id = ?'); vals.push(fields.pendingWinnerUserId); }
-  if ('publishedWinnerUserId' in fields) { sets.push('published_winner_user_id = ?'); vals.push(fields.publishedWinnerUserId); }
+  if ('messageId' in fields)            { sets.push('message_id = ?'); vals.push(fields.messageId); }
+  if ('status' in fields)               { sets.push('status = ?'); vals.push(fields.status); }
+  if ('pendingWinnerUserId' in fields)  { sets.push('pending_winner_user_id = ?'); vals.push(fields.pendingWinnerUserId); }
+  if ('publishedWinnerUserId' in fields){ sets.push('published_winner_user_id = ?'); vals.push(fields.publishedWinnerUserId); }
   if (!sets.length) return { changes: 0 };
   vals.push(id);
   return db.prepare(`UPDATE giveaways SET ${sets.join(', ')} WHERE id = ?`).run(...vals);
