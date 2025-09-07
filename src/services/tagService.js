@@ -17,8 +17,24 @@ function now() { return Date.now(); }
 
 async function fetchLiveTagSet(client) {
   if (!TAG_GUILD_ID || !TAG_GUILD_ROLE_ID) {
-    logger.warn('[tagService] Missing TAG_GUILD_ID/TAG_GUILD_ROLE_ID; returning empty set.');
-    return new Set();
+    logger.warn('[tagService] Missing TAG_GUILD_ID or tagSourceRoleId; falling back to API primary_guild scan');
+    if (!MAIN_GUILD_ID) return new Set();
+    const mainGuild = await client.guilds.fetch(MAIN_GUILD_ID);
+    const members = await mainGuild.members.fetch();
+    const out = new Set();
+    let checked = 0;
+    for (const m of members.values()) {
+      try {
+        const { identity_enabled, identity_guild_id } = await fetchUserPrimaryGuild(m.id, MAIN_GUILD_ID);
+        if (identity_enabled && identity_guild_id === MAIN_GUILD_ID) out.add(m.id);
+      } catch (err) {
+        logger.debug({ err, userId: m.id }, '[tagService] primary_guild check failed');
+      }
+      checked++;
+      if (checked % 25 === 0) await new Promise(r => setTimeout(r, 200));
+    }
+    logger.info({ count: out.size }, '[tagService] API fallback set built');
+    return out;
   }
   logger.debug({ TAG_GUILD_ID, TAG_GUILD_ROLE_ID }, '[tagService] fetching live tag set');
   try {
@@ -182,6 +198,12 @@ export class TagService {
       return;
     }
 
+    // Without a tagSourceRoleId we disable event mirroring entirely in this environment
+    if (!this.TAG_ROLE_ID) {
+      logger.warn('[TagService] No tagSourceRoleId configured; disabling event mirroring (using API/backfill only)');
+      return;
+    }
+
     // Auto-fallback: if the configured tag guild is not accessible, use MAIN as source in this environment
     try {
       if (this.TAG_GUILD_ID) {
@@ -274,6 +296,7 @@ export class TagService {
 
   async _onGuildMemberUpdate(_oldM, newM) {
     try {
+      if (!this.TAG_ROLE_ID) return;
       if (!newM?.guild) return;
       logger.info({ guildId: newM.guild.id, userId: newM.id }, '[TagService] guildMemberUpdate received');
       if (!this.TAG_GUILD_ID) { logv('no TAG_GUILD_ID configured; ignore'); return; }
@@ -289,6 +312,7 @@ export class TagService {
   }
   async _onGuildMemberAdd(member) {
     try {
+      if (!this.TAG_ROLE_ID) return;
       if (member.guild.id !== this.TAG_GUILD_ID) return;
       logger.info({ userId: member.id }, '[TagService] guildMemberAdd (TAG guild)');
       const fresh = await this._fetchMember(this.TAG_GUILD_ID, member.id);
@@ -300,6 +324,7 @@ export class TagService {
   }
   async _onGuildMemberRemove(member) {
     try {
+      if (!this.TAG_ROLE_ID) return;
       if (member.guild.id !== this.TAG_GUILD_ID) return;
       logger.info({ userId: member.id }, '[TagService] guildMemberRemove (TAG guild)');
       await this._ensureMainRole(member.id, false);
