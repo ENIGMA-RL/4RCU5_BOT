@@ -1,7 +1,7 @@
 // Create the initial folder structure and main bot file
 
 // Import necessary modules
-import { Client, GatewayIntentBits, Collection, Partials } from 'discord.js';
+import { Client, GatewayIntentBits, Collection, Partials, ApplicationCommandOptionType } from 'discord.js';
 import dotenv from 'dotenv';
 import { updateStats } from './features/stats/statsUpdater.js';
 import { updateStaffEmbed } from './features/staff/staffEmbed.js';
@@ -22,6 +22,7 @@ import { tick as voiceTick } from './features/leveling/voiceSessionService.js';
 import './database/db.js';
 import { registerTagSync } from './features/tag-sync/index.js';
 import TagService from './services/tagService.js';
+import { wireTagSync } from './features/tag/wireTagSync.js';
 
 // Load environment variables
 dotenv.config();
@@ -217,33 +218,64 @@ client.once('ready', async () => {
   // Register commands dynamically based on roles
   await registerCommands(client);
 
-  // Register real-time tag sync on user profile changes (OAuth/API primary_guild)
+  // Optionally enable the UserUpdate listener (default off to reduce noise during dev)
   try {
-    const roleCfg = rolesConfig();
-    const mainGuildId = roleCfg.mainGuildId || roleCfg.main_guild_id || null; // TARGET guild to grant/remove the role
-    // Identity guild to check server tag against: prefer configured tag guild (prod main), fallback to main
-    const identityGuildId = roleCfg.tagGuildId || roleCfg.tagSourceGuildId || mainGuildId;
-    const tagRoleId = roleCfg.cnsOfficialRole || roleCfg.cns_official_role || null;
-    if (identityGuildId && mainGuildId && tagRoleId) {
-      registerTagSync(client, { identityGuildId, targetGuildId: mainGuildId, targetRoleId: tagRoleId });
-      logger.info({ identityGuildId, mainGuildId, tagRoleId }, 'UserUpdate listener registered for tag sync');
+    if (process.env.ENABLE_USERUPDATE_TAG_SYNC === 'true') {
+      const roleCfg = rolesConfig();
+      const mainGuildId = roleCfg.mainGuildId || roleCfg.main_guild_id || null; // TARGET guild to grant/remove the role
+      const identityGuildId = roleCfg.tagGuildId || roleCfg.tagSourceGuildId || mainGuildId;
+      const tagRoleId = roleCfg.cnsOfficialRole || roleCfg.cns_official_role || null;
+      if (identityGuildId && mainGuildId && tagRoleId) {
+        registerTagSync(client, { identityGuildId, targetGuildId: mainGuildId, targetRoleId: tagRoleId });
+        logger.info({ identityGuildId, mainGuildId, tagRoleId }, 'UserUpdate listener registered for tag sync');
+      } else {
+        logger.warn({ identityGuildId, mainGuildId, tagRoleId }, 'Skipping UserUpdate listener registration (missing IDs)');
+      }
     } else {
-      logger.warn({ identityGuildId, mainGuildId, tagRoleId }, 'Skipping UserUpdate listener registration (missing IDs)');
+      logger.info('UserUpdate listener disabled (ENABLE_USERUPDATE_TAG_SYNC!=true)');
     }
   } catch (e) {
     logger.error({ err: e }, 'Failed to register UserUpdate listener for tag sync');
   }
 
-  // Start TagService once (mirrors from tag guild events and covers join/leave)
+  // Optionally start TagService mirroring (default off without tagSourceRoleId)
   try {
-    if (!client.__tagServiceStarted) {
-      const tagSvc = new TagService(client);
-      tagSvc.start();
-      client.__tagServiceStarted = true;
-      logger.info('TagService started');
+    if (process.env.ENABLE_EVENT_TAG_MIRROR === 'true') {
+      if (!client.__tagServiceStarted) {
+        const tagSvc = new TagService(client);
+        tagSvc.start();
+        client.__tagServiceStarted = true;
+        logger.info('TagService started');
+      }
+    } else {
+      logger.info('TagService disabled (ENABLE_EVENT_TAG_MIRROR!=true)');
     }
   } catch (e) {
     logger.error({ err: e }, 'Failed to start TagService');
+  }
+
+  // Wire presence + /tag-sync passthrough to the unified syncUserTagRole
+  try {
+    wireTagSync(client);
+    logger.info('Tag wire-up active');
+  } catch (e) {
+    logger.error({ err: e }, 'Failed to wire tag sync');
+  }
+
+  // Ensure /tag-sync is present as a guild command
+  try {
+    const guild = await client.guilds.fetch(process.env.GUILD_ID);
+    await guild.commands.create({
+      name: 'tag-sync',
+      description: 'Sync CNS tag rol',
+      options: [
+        { name: 'user', description: 'User om te syncen', type: ApplicationCommandOptionType.User, required: false },
+        { name: 'all', description: 'Bulk sync alle members', type: ApplicationCommandOptionType.Boolean, required: false }
+      ]
+    });
+    logger.info('[TagWire] /tag-sync geregistreerd in guild');
+  } catch (e) {
+    logger.error({ err: e }, '[TagWire] kon /tag-sync niet registreren');
   }
 });
 
