@@ -10,6 +10,7 @@ import { fetchRoleHolders } from '../../utils/discordHelpers.js';
 
 // Global backoff and simple cache to reduce rate limit hits
 let globalRateLimitedUntil = 0;
+// Default: no cache; respect 0 via nullish coalescing
 export const TAG_STATUS_TTL_MS = Number(process.env.TAG_STATUS_TTL_MS ?? 0);
 const tagStatusCache = new Map(); // userId -> { at: number, result }
 
@@ -47,7 +48,8 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
     const noCache = !!opts.noCache;
     if (!forceRefresh && !noCache) {
       const cached = tagStatusCache.get(userId);
-      if (cached && TAG_STATUS_TTL_MS > 0 && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
+      if (TAG_STATUS_TTL_MS > 0 && cached && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
+        // logger.debug({ userId }, '[TagSync] cache hit');
         return cached.result;
       }
     }
@@ -87,7 +89,7 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
       tagData,
       userData
     };
-    if (!noCache) tagStatusCache.set(userId, { at: Date.now(), result: out });
+    if (!noCache && TAG_STATUS_TTL_MS > 0) tagStatusCache.set(userId, { at: Date.now(), result: out });
     return out;
   } catch (error) {
     logger.error({ err: error }, `Error checking tag status for user ${userId}`);
