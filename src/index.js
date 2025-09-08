@@ -13,19 +13,18 @@ import loadCommands from './loaders/commandLoader.js';
 import loadEvents from './loaders/eventLoader.js';
 import { setPresence } from './features/presence/presenceManager.js';
 import { channelsConfig, getEnvironment, rolesConfig } from './config/configLoader.js';
-// removed redundant inline tag sync handlers in favor of event/service
+import { syncUserTagRole } from './features/tagSync/tagSyncService.js';
 import CleanupService from './features/system/cleanupService.js';
 import logger from './utils/logger.js';
 import { registerJob, startAll } from './scheduler/index.js';
 import { tick as voiceTick } from './features/leveling/voiceSessionService.js';
 // Ensure database schema and migrations are applied on startup
 import './database/db.js';
-import { registerTagSync } from './features/tag-sync/index.js';
-import TagService from './services/tagService.js';
-import { wireTagSync } from './features/tag/wireTagSync.js';
+// Tag mirroring and legacy wiring removed
 
-// Load environment variables
-dotenv.config();
+// Load environment variables (.env.dev when NODE_ENV=development; override with DOTENV_CONFIG_PATH)
+const _envPath = process.env.DOTENV_CONFIG_PATH || (process.env.NODE_ENV === 'development' ? '.env.dev' : undefined);
+if (_envPath) dotenv.config({ path: _envPath }); else dotenv.config();
 
 // Initialize the Discord client
 const client = new Client({
@@ -96,11 +95,19 @@ client.once('ready', async () => {
   const GUILD_ID = cfgGuildId || process.env.GUILD_ID;
   logger.info({ GUILD_ID, source: cfgGuildId ? 'rolesConfig' : 'env' }, 'Selecting main guild');
   let guild = client.guilds.cache.get(GUILD_ID);
-  
-  // If the specified guild is not found, use the first available guild
-  if (!guild && client.guilds.cache.size > 0) {
-    guild = client.guilds.cache.first();
-    logger.warn(`Guild ${GUILD_ID} not found, using first available guild: ${guild.name} (${guild.id})`);
+  // Attempt to fetch the configured guild if not in cache
+  if (!guild && GUILD_ID) {
+    try {
+      guild = await client.guilds.fetch(GUILD_ID);
+      logger.info(`Fetched configured guild: ${guild.name} (${guild.id})`);
+    } catch (e) {
+      logger.error({ err: e, GUILD_ID }, 'Failed to fetch configured guild');
+    }
+  }
+  // If still not found, do not silently switch guilds; log and abort initialization-dependent steps
+  if (!guild) {
+    logger.error({ GUILD_ID }, 'Configured guild not found. Ensure the bot is in this guild and the ID is correct.');
+    return;
   }
   
   if (guild) {
@@ -163,10 +170,7 @@ client.once('ready', async () => {
       await updateStats(client, guildId, statsChannelId);
     }, 5 * 60 * 1000, { jitterMs: 30 * 1000, singleton: true });
 
-    registerJob('tag.sync', async () => {
-      const { syncTagRolesToMainGuild } = await import('./services/tagService.js');
-      await syncTagRolesToMainGuild(client);
-    }, 5 * 60 * 1000, { jitterMs: 45 * 1000, singleton: true });
+    // Periodic tag sync removed (no mirroring). Manual via /tag-sync only.
 
     registerJob('levels.syncRoles', async () => {
       await syncLevelRoles(guild);
@@ -218,64 +222,31 @@ client.once('ready', async () => {
   // Register commands dynamically based on roles
   await registerCommands(client);
 
-  // Optionally enable the UserUpdate listener (default off to reduce noise during dev)
-  try {
-    if (process.env.ENABLE_USERUPDATE_TAG_SYNC === 'true') {
-      const roleCfg = rolesConfig();
-      const mainGuildId = roleCfg.mainGuildId || roleCfg.main_guild_id || null; // TARGET guild to grant/remove the role
-      const identityGuildId = roleCfg.tagGuildId || roleCfg.tagSourceGuildId || mainGuildId;
-      const tagRoleId = roleCfg.cnsOfficialRole || roleCfg.cns_official_role || null;
-      if (identityGuildId && mainGuildId && tagRoleId) {
-        registerTagSync(client, { identityGuildId, targetGuildId: mainGuildId, targetRoleId: tagRoleId });
-        logger.info({ identityGuildId, mainGuildId, tagRoleId }, 'UserUpdate listener registered for tag sync');
-      } else {
-        logger.warn({ identityGuildId, mainGuildId, tagRoleId }, 'Skipping UserUpdate listener registration (missing IDs)');
-      }
-    } else {
-      logger.info('UserUpdate listener disabled (ENABLE_USERUPDATE_TAG_SYNC!=true)');
-    }
-  } catch (e) {
-    logger.error({ err: e }, 'Failed to register UserUpdate listener for tag sync');
-  }
+  // /tag-sync command is provided by command loader; no manual registration needed here
+});
 
-  // Optionally start TagService mirroring (default off without tagSourceRoleId)
+// Minimal RAW listener: probe on user/guild member update packets with debounce
+const __rawDebounce = new Map();
+const __RAW_MIN_MS = Number(process.env.TAG_SYNC_MIN_INTERVAL_MS || 1500);
+client.on('raw', async (pkt) => {
   try {
-    if (process.env.ENABLE_EVENT_TAG_MIRROR === 'true') {
-      if (!client.__tagServiceStarted) {
-        const tagSvc = new TagService(client);
-        tagSvc.start();
-        client.__tagServiceStarted = true;
-        logger.info('TagService started');
-      }
-    } else {
-      logger.info('TagService disabled (ENABLE_EVENT_TAG_MIRROR!=true)');
-    }
-  } catch (e) {
-    logger.error({ err: e }, 'Failed to start TagService');
-  }
+    const t = pkt?.t; if (!t) return;
+    if (t !== 'GUILD_MEMBER_UPDATE' && t !== 'USER_UPDATE' && t !== 'PRESENCE_UPDATE') return;
+    const userId = pkt?.d?.user?.id || pkt?.d?.user_id || pkt?.d?.id; if (!userId) return;
+    const now = Date.now();
+    const last = __rawDebounce.get(userId) || 0;
+    if (now - last < __RAW_MIN_MS) return;
+    __rawDebounce.set(userId, now);
 
-  // Wire presence + /tag-sync passthrough to the unified syncUserTagRole
-  try {
-    wireTagSync(client);
-    logger.info('Tag wire-up active');
-  } catch (e) {
-    logger.error({ err: e }, 'Failed to wire tag sync');
-  }
+    const MAIN_GUILD_ID = process.env.GUILD_ID || rolesConfig().mainGuildId || rolesConfig().main_guild_id;
+    if (!MAIN_GUILD_ID) return;
+    const guild = await client.guilds.fetch(MAIN_GUILD_ID).catch(() => null);
+    if (!guild) return;
 
-  // Ensure /tag-sync is present as a guild command
-  try {
-    const guild = await client.guilds.fetch(process.env.GUILD_ID);
-    await guild.commands.create({
-      name: 'tag-sync',
-      description: 'Sync CNS tag rol',
-      options: [
-        { name: 'user', description: 'User om te syncen', type: ApplicationCommandOptionType.User, required: false },
-        { name: 'all', description: 'Bulk sync alle members', type: ApplicationCommandOptionType.Boolean, required: false }
-      ]
-    });
-    logger.info('[TagWire] /tag-sync geregistreerd in guild');
-  } catch (e) {
-    logger.error({ err: e }, '[TagWire] kon /tag-sync niet registreren');
+    const res = await syncUserTagRole(userId, guild, client);
+    logger.info({ userId, t, res }, '[TagWire] raw→syncUserTagRole');
+  } catch (err) {
+    logger.error({ err }, '[TagWire] raw handler failed');
   }
 });
 
