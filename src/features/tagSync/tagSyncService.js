@@ -1,22 +1,12 @@
 import fetch from 'node-fetch';
-import { fetchWithBackoff } from '../../utils/fetchWithBackoff.js';
-import { rolesConfig, channelsConfig, isDev, oauthConfig } from '../../config/configLoader.js';
+import { rolesConfig, channelsConfig, isDev } from '../../config/configLoader.js';
 import { EmbedBuilder } from 'discord.js';
 import { logTagSync } from '../../utils/botLogger.js';
-import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild, isCnsTagCurrentlyEquipped, syncExistingTagHolders } from '../../repositories/tagRepo.js';
+import { setCnsTagEquippedWithGuild, setCnsTagUnequippedWithGuild, syncExistingTagHolders } from '../../repositories/tagRepo.js';
 import logger from '../../utils/logger.js';
-import { botTokenHasTag, oauthHasTag } from './strategy.js';
-import { fetchRoleHolders } from '../../utils/discordHelpers.js';
 
-// Global backoff and simple cache to reduce rate limit hits
+// Minimal: keep only global backoff; no per-user cache
 let globalRateLimitedUntil = 0;
-// Default: no cache; respect 0 via nullish coalescing
-export const TAG_STATUS_TTL_MS = Number(process.env.TAG_STATUS_TTL_MS ?? 0);
-const tagStatusCache = new Map(); // userId -> { at: number, result }
-
-export function clearTagStatusCache(userId) {
-  if (userId) tagStatusCache.delete(userId); else tagStatusCache.clear();
-}
 
 export function isGloballyRateLimited() {
   return Date.now() < globalRateLimitedUntil;
@@ -39,58 +29,45 @@ function setGlobalRateLimitFromHeaders(response) {
  * @param {Client} client - The Discord client
  * @returns {Promise<{userId: string, isUsingTag: boolean, tagData: any, userData: any}>}
  */
-export async function checkUserTagStatus(userId, client, opts = {}) {
+export async function checkUserTagStatus(userId, client) {
   try {
+    logger.info({ userId }, '[TagSync] checkUserTagStatus: start');
     if (isGloballyRateLimited()) {
+      logger.warn({ userId, until: getGlobalRateLimitReset() }, '[TagSync] checkUserTagStatus: globally rate-limited, abort');
       throw new Error('Rate limited: global backoff active');
     }
-    const forceRefresh = !!opts.forceRefresh;
-    const noCache = !!opts.noCache;
-    if (!forceRefresh && !noCache) {
-      const cached = tagStatusCache.get(userId);
-      if (TAG_STATUS_TTL_MS > 0 && cached && (Date.now() - cached.at) < TAG_STATUS_TTL_MS) {
-        // logger.debug({ userId }, '[TagSync] cache hit');
-        return cached.result;
-      }
+    logger.debug({ userId }, '[TagSync] checkUserTagStatus: fetching /users/:id');
+    // Fetch user data from Discord API using bot token
+    const userResponse = await fetch(`https://discord.com/api/users/${userId}`, {
+      headers: { Authorization: `Bot ${client.token}`, 'X-Track': '1' }
+    });
+    logger.debug({ userId, status: userResponse.status, ok: userResponse.ok }, '[TagSync] checkUserTagStatus: fetch complete');
+    if (userResponse.status === 429) {
+      const retryAfter = setGlobalRateLimitFromHeaders(userResponse);
+      logger.warn(`Rate limited when checking tag status for user ${userId}. Next attempt after ${retryAfter} seconds.`);
+      throw new Error('Rate limited: 429');
     }
-    const useOauth = opts.strategy === 'oauth' && opts.accessToken;
-    const fetchRes = useOauth
-      ? await oauthHasTag({ accessToken: opts.accessToken })
-      : await botTokenHasTag({ userId, client });
-
-    if (!fetchRes.ok) {
-      throw new Error('Failed to fetch user tag status');
+    if (userResponse.status >= 500 && userResponse.status < 600) {
+      logger.warn(`Server error (${userResponse.status}) when checking tag status for user ${userId}. Retrying later...`);
+      throw new Error(`Server error: ${userResponse.status}`);
     }
-    const { userData, tagData, isUsingTag } = fetchRes;
+    if (!userResponse.ok) {
+      logger.error({ userId, status: userResponse.status }, '[TagSync] checkUserTagStatus: non-ok response');
+      throw new Error(`Failed to fetch user data: ${userResponse.status}`);
+    }
+    const userData = await userResponse.json();
+    const tagData = userData.primary_guild;
     
     // Debug logging
-    if (isDev()) {
-      logger.trace({
-        userId,
-        hasPrimaryGuild: !!tagData,
-        primaryGuild: tagData,
-        identityEnabled: tagData?.identity_enabled,
-        identityGuildId: tagData?.identity_guild_id,
-        expectedGuildId: rolesConfig().tagGuildId
-      }, '[TagSync Debug] User data');
-    }
+    logger.info({ userId, hasPrimaryGuild: !!tagData, identityEnabled: tagData?.identity_enabled, identityGuildId: tagData?.identity_guild_id }, '[TagSync] checkUserTagStatus: parsed user data');
     
     // Check if user has tag enabled for our main guild
-    const expectedGuildId = process.env.GUILD_ID || rolesConfig().tagGuildId;
+    const expectedGuildId = rolesConfig().mainGuildId || rolesConfig().main_guild_id || process.env.GUILD_ID;
     const hasTag = Boolean(tagData && tagData.identity_enabled && tagData.identity_guild_id === expectedGuildId);
 
-    if (isDev()) {
-      logger.trace(`[TagSync Debug] User ${userId} hasTag: ${hasTag}`);
-    }
+    logger.info({ userId, expectedGuildId, hasTag }, '[TagSync] checkUserTagStatus: computed hasTag');
 
-    const out = {
-      userId,
-      isUsingTag: hasTag,
-      tagData,
-      userData
-    };
-    if (!noCache && TAG_STATUS_TTL_MS > 0) tagStatusCache.set(userId, { at: Date.now(), result: out });
-    return out;
+    return { userId, isUsingTag: hasTag, tagData, userData };
   } catch (error) {
     logger.error({ err: error }, `Error checking tag status for user ${userId}`);
     throw error;
@@ -104,55 +81,48 @@ export async function checkUserTagStatus(userId, client, opts = {}) {
  * @param {Client} client - The Discord client
  * @returns {Promise<{success: boolean, action?: string, user?: string, reason?: string, error?: string}>}
  */
-export async function syncUserTagRole(userId, guild, client, opts = {}) {
+export async function syncUserTagRole(userId, guild, client) {
   try {
+    logger.info({ userId, guildId: guild?.id }, '[TagSync] syncUserTagRole: start');
     if (isGloballyRateLimited()) {
       return { success: false, error: 'rate_limited' };
     }
-    
-    // Skip tag sync in development mode unless override is enabled
-    if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
-      logger.debug(`[TagSync] Skipping tag sync for user ${userId} in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)`);
+    // Skip tag sync in development mode
+    if (isDev()) {
+      logger.debug(`[TagSync] Skipping tag sync for user ${userId} in development mode`);
       return { success: true, action: 'skipped', user: 'Development Mode', reason: 'Tag sync disabled in development' };
     }
-    
-    // Choose strategy: default bot-token; opt-in oauth via config
-    const strategy = (oauthConfig().strategy || 'bot');
-    const tagStatus = await checkUserTagStatus(
-      userId,
-      client,
-      strategy === 'oauth'
-        ? { strategy: 'oauth', accessToken: null, forceRefresh: !!opts.forceRefresh }
-        : { forceRefresh: !!opts.forceRefresh }
-    );
+    const tagStatus = await checkUserTagStatus(userId, client);
+    logger.info({ userId, isUsingTag: tagStatus.isUsingTag }, '[TagSync] syncUserTagRole: tag status');
     
     // Get the member object
     const member = await guild.members.fetch(userId).catch(() => null);
     if (!member) {
+      logger.warn({ userId, guildId: guild.id }, '[TagSync] syncUserTagRole: member not found in guild');
       return { success: false, error: 'Member not found' };
     }
 
     const cnsOfficialRoleId = rolesConfig().cnsOfficialRole;
     const hasRole = member.roles.cache.has(cnsOfficialRoleId);
+    logger.debug({ userId, cnsOfficialRoleId, hasRole }, '[TagSync] syncUserTagRole: role presence');
 
     if (tagStatus.isUsingTag) {
       // User has tag enabled - add role if they don't have it
       if (!hasRole) {
+        logger.info({ userId, roleId: cnsOfficialRoleId }, '[TagSync] syncUserTagRole: adding role');
         await member.roles.add(cnsOfficialRoleId, 'Server tag enabled');
         
         // Track tag equipment in database
-        logger.trace(`About to call setCnsTagEquippedWithGuild for user ${userId} in guild ${guild.id}`);
+        logger.debug(`About to call setCnsTagEquippedWithGuild for user ${userId} in guild ${guild.id}`);
         setCnsTagEquippedWithGuild(userId, guild.id);
-        logger.trace(`Called setCnsTagEquippedWithGuild for user ${userId}`);
+        logger.debug(`Called setCnsTagEquippedWithGuild for user ${userId}`);
         
         // Log the role assignment
         const role = guild.roles.cache.get(cnsOfficialRoleId);
         if (role) {
           await logTagSync(guild.client, member.id, member.user.tag, 'Added', 'Server tag enabled');
         }
-        
-        // keep cache truthful
-        tagStatusCache.set(userId, { at: Date.now(), result: { userId, isUsingTag: true, tagData: tagStatus.tagData, userData: tagStatus.userData } });
+        logger.info({ userId }, '[TagSync] syncUserTagRole: add complete');
         return { 
           success: true, 
           action: 'added', 
@@ -160,6 +130,7 @@ export async function syncUserTagRole(userId, guild, client, opts = {}) {
           reason: 'Server tag enabled'
         };
       } else {
+        logger.info({ userId }, '[TagSync] syncUserTagRole: no_change (already had role)');
         return { 
           success: true, 
           action: 'no_change', 
@@ -170,20 +141,20 @@ export async function syncUserTagRole(userId, guild, client, opts = {}) {
     } else {
       // User has tag disabled - remove role if they have it
       if (hasRole) {
+        logger.info({ userId, roleId: cnsOfficialRoleId }, '[TagSync] syncUserTagRole: removing role');
         await member.roles.remove(cnsOfficialRoleId, 'Server tag disabled');
         
         // Track tag unequipment in database
-        logger.trace(`About to call setCnsTagUnequippedWithGuild for user ${userId} in guild ${guild.id}`);
+        logger.debug(`About to call setCnsTagUnequippedWithGuild for user ${userId} in guild ${guild.id}`);
         setCnsTagUnequippedWithGuild(userId, guild.id);
-        logger.trace(`Called setCnsTagUnequippedWithGuild for user ${userId}`);
+        logger.debug(`Called setCnsTagUnequippedWithGuild for user ${userId}`);
         
         // Log the role removal
         const role = guild.roles.cache.get(cnsOfficialRoleId);
         if (role) {
           await logTagSync(guild.client, member.id, member.user.tag, 'Removed', 'Server tag disabled');
         }
-        
-        tagStatusCache.set(userId, { at: Date.now(), result: { userId, isUsingTag: false, tagData: tagStatus.tagData, userData: tagStatus.userData } });
+        logger.info({ userId }, '[TagSync] syncUserTagRole: remove complete');
         return { 
           success: true, 
           action: 'removed', 
@@ -191,6 +162,7 @@ export async function syncUserTagRole(userId, guild, client, opts = {}) {
           reason: 'Server tag disabled'
         };
       } else {
+        logger.info({ userId }, '[TagSync] syncUserTagRole: no_change (did not have role)');
         return { 
           success: true, 
           action: 'no_change', 
@@ -217,9 +189,9 @@ export async function syncUserTagRole(userId, guild, client, opts = {}) {
  */
 export async function syncAllUserTags(guild, client) {
   try {
-    // Skip tag sync in development mode unless override is enabled
-    if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
-      logger.debug('[TagSync] Skipping bulk tag sync in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)');
+    // Skip tag sync in development mode
+    if (isDev()) {
+      logger.debug('[TagSync] Skipping bulk tag sync in development mode');
       return { success: true, processed: 0, successCount: 0, errorCount: 0, results: [], message: 'Tag sync disabled in development mode' };
     }
     if (isGloballyRateLimited()) {
@@ -227,7 +199,9 @@ export async function syncAllUserTags(guild, client) {
     }
     
     // Fetch all members in the guild
+    logger.info({ guildId: guild.id }, '[TagSync] syncAllUserTags: fetching members');
     const members = await guild.members.fetch();
+    logger.info({ guildId: guild.id, count: members.size }, '[TagSync] syncAllUserTags: members fetched');
     
     const results = [];
     let successCount = 0;
@@ -239,10 +213,12 @@ export async function syncAllUserTags(guild, client) {
     
     for (let i = 0; i < memberArray.length; i += batchSize) {
       const batch = memberArray.slice(i, i + batchSize);
+      logger.debug({ start: i, end: i + batchSize }, '[TagSync] syncAllUserTags: processing batch');
       
       const batchPromises = batch.map(async (member) => {
         try {
           const result = await syncUserTagRole(member.id, guild, client);
+          logger.debug({ userId: member.id, result }, '[TagSync] syncAllUserTags: user processed');
           if (result.success) {
             successCount++;
           } else {
@@ -310,22 +286,24 @@ export async function syncAllUserTags(guild, client) {
  * @returns {Promise<{count: number, updated: number, removed: number}>}
  */
 export async function syncTagRolesFromGuild(mainGuild, client) {
-  // Skip tag sync in development mode unless override is enabled
-  if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
-    logger.debug('[TagSync] Skipping tag guild sync in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)');
+  // Skip tag sync in development mode
+  if (isDev()) {
+    logger.debug('[TagSync] Skipping tag guild sync in development mode');
     return { count: 0, updated: 0, removed: 0 };
   }
   if (isGloballyRateLimited()) {
     return { count: 0, updated: 0, removed: 0 };
   }
   
-  const tagGuildId = rolesConfig().tagGuildId;
+  const expectedGuildId = rolesConfig().mainGuildId || rolesConfig().main_guild_id || process.env.GUILD_ID;
   const tagRoleId = rolesConfig().cnsOfficialRole;
   const statsChannelId = channelsConfig().statsChannelId;
   const MAX_PER_RUN = Number(process.env.TAG_SYNC_MAX_PER_RUN || 50);
 
   // Fetch all members in the main guild
+  logger.info({ guildId: mainGuild.id }, '[TagSync] syncTagRolesFromGuild: fetching members');
   const mainGuildMembers = await mainGuild.members.fetch();
+  logger.info({ guildId: mainGuild.id, count: mainGuildMembers.size }, '[TagSync] syncTagRolesFromGuild: members fetched');
   let count = 0;
   let updated = 0;
   let removed = 0;
@@ -334,11 +312,10 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
   for (const member of mainGuildMembers.values()) {
     try {
       // Fetch user data from Discord API to check their primary guild
-      const userResponse = await fetchWithBackoff(
-        `https://discord.com/api/users/${member.user.id}`,
-        { headers: { Authorization: `Bot ${client.token}` } },
-        { name: 'discord:getUser' }
-      );
+      const userResponse = await fetch(`https://discord.com/api/users/${member.user.id}`, {
+        headers: { Authorization: `Bot ${client.token}`, 'X-Track': '1' }
+      });
+      logger.debug({ userId: member.user.id, status: userResponse.status }, '[TagSync] syncTagRolesFromGuild: fetched /users/:id');
 
       if (userResponse.status === 429) {
         const retryAfter = setGlobalRateLimitFromHeaders(userResponse);
@@ -362,9 +339,7 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
       const tagData = userData.primary_guild;
       
       // Check if user has tag enabled for the configured guild
-      const hasTag = tagData && 
-                    tagData.identity_enabled && 
-                    tagData.identity_guild_id === tagGuildId;
+      const hasTag = tagData && tagData.identity_enabled && tagData.identity_guild_id === expectedGuildId;
 
       const hasRole = member.roles.cache.has(tagRoleId);
       
@@ -421,63 +396,6 @@ export async function syncTagRolesFromGuild(mainGuild, client) {
   return { count, updated, removed };
 }
 
-// Mirror tags based on a source guild role → destination CNS role (robust fallback)
-export async function mirrorFromSourceRole(client) {
-  const roles = rolesConfig();
-  const SRC_GUILD_ID = roles.tagSourceGuildId ?? roles.tagGuildId;
-  const SRC_ROLE_ID  = roles.tagSourceRoleId ?? roles.cnsOfficialRole;
-  const DST_GUILD_ID = process.env.GUILD_ID;
-  const DST_ROLE_ID  = roles.cnsOfficialRole;
-
-  const srcGuild = await client.guilds.fetch(SRC_GUILD_ID).catch(() => null);
-  const dstGuild = await client.guilds.fetch(DST_GUILD_ID).catch(() => null);
-  if (!srcGuild || !dstGuild) return { count: 0, updated: 0, removed: 0 };
-
-  const srcHolders = await fetchRoleHolders(srcGuild, SRC_ROLE_ID);
-  const dstMembers = await dstGuild.members.fetch();
-  const srcIds = new Set([...srcHolders.keys()]);
-
-  let added = 0, removed = 0;
-  for (const [, m] of dstMembers) {
-    const shouldHave = srcIds.has(m.id);
-    const hasDst = m.roles.cache.has(DST_ROLE_ID);
-    if (shouldHave && !hasDst) { try { await m.roles.add(DST_ROLE_ID, 'mirror tag from source guild'); added++; } catch {} }
-  }
-  for (const [, m] of dstMembers) {
-    const shouldHave = srcIds.has(m.id);
-    const hasDst = m.roles.cache.has(DST_ROLE_ID);
-    if (hasDst && !shouldHave) { try { await m.roles.remove(DST_ROLE_ID, 'mirror tag removed in source guild'); removed++; } catch {} }
-  }
-  return { count: srcIds.size, updated: added, removed };
-}
-
-// Mirror for a single user id from source guild role → destination official role
-export async function mirrorUserFromSourceRole(client, userId) {
-  const roles = rolesConfig();
-  const SRC_GUILD_ID = roles.tagSourceGuildId ?? roles.tagGuildId;
-  const SRC_ROLE_ID  = roles.tagSourceRoleId ?? roles.cnsOfficialRole;
-  const DST_GUILD_ID = process.env.GUILD_ID;
-  const DST_ROLE_ID  = roles.cnsOfficialRole;
-
-  const srcGuild = await client.guilds.fetch(SRC_GUILD_ID).catch(() => null);
-  const dstGuild = await client.guilds.fetch(DST_GUILD_ID).catch(() => null);
-  if (!srcGuild || !dstGuild) return { added: 0, removed: 0 };
-
-  try { await srcGuild.members.fetch({ user: userId }); } catch {}
-  try { await dstGuild.members.fetch({ user: userId }); } catch {}
-
-  const srcMember = srcGuild.members.cache.get(userId);
-  const dstMember = dstGuild.members.cache.get(userId);
-  if (!dstMember) return { added: 0, removed: 0 };
-
-  const shouldHave = !!srcMember?.roles.cache.has(SRC_ROLE_ID);
-  const hasDst = dstMember.roles.cache.has(DST_ROLE_ID);
-
-  if (shouldHave && !hasDst) { try { await dstMember.roles.add(DST_ROLE_ID, 'mirror tag from source guild'); } catch {} return { added: 1, removed: 0 }; }
-  if (!shouldHave && hasDst) { try { await dstMember.roles.remove(DST_ROLE_ID, 'mirror tag removed in source guild'); } catch {} return { added: 0, removed: 1 }; }
-  return { added: 0, removed: 0 };
-}
-
 /**
  * Sync existing tag holders on bot startup
  * This ensures users who already have the CNS tag get timestamps recorded
@@ -488,10 +406,9 @@ export async function mirrorUserFromSourceRole(client, userId) {
 export async function syncExistingTagHoldersOnStartup(guild, client) {
   try {
     logger.info('Starting startup sync for existing CNS tag holders...');
-    
-    // Skip in development mode unless override is enabled
-    if (isDev() && process.env.ALLOW_DEV_TAG_WRITES !== 'true') {
-      logger.debug('[TagSync] Skipping startup sync in development mode (set ALLOW_DEV_TAG_WRITES=true to enable)');
+    // Skip in development mode
+    if (isDev()) {
+      logger.debug('[TagSync] Skipping startup sync in development mode');
       return { success: true, synced: 0, total: 0, message: 'Startup sync disabled in development mode' };
     }
     
@@ -512,6 +429,7 @@ export async function syncExistingTagHoldersOnStartup(guild, client) {
     // Get all members with the CNS Official role
     const membersWithRole = role.members;
     const totalTagHolders = membersWithRole.size;
+    logger.info({ totalTagHolders }, '[TagSync] startup sync: found existing holders');
     
     if (totalTagHolders === 0) {
       logger.info('No users currently have the CNS Official role');

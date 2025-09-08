@@ -5,20 +5,39 @@ import logger from '../../utils/logger.js';
 
 const { leveling } = levelSettingsConfig();
 
-function calculateLevel(xp, thresholds) {
+function toThresholdArray(thresholdsLike) {
+  if (Array.isArray(thresholdsLike)) return thresholdsLike;
+  if (thresholdsLike && typeof thresholdsLike === 'object') {
+    const entries = Object.entries(thresholdsLike)
+      .map(([lvl, xp]) => [Number(lvl), Number(xp)])
+      .filter(([lvl, xp]) => Number.isFinite(lvl) && Number.isFinite(xp))
+      .sort((a, b) => a[0] - b[0]);
+    const arr = [];
+    for (const [lvl, xp] of entries) {
+      arr[lvl - 1] = xp;
+    }
+    return arr;
+  }
+  return [];
+}
+
+export function calculateLevel(xp, thresholdsLike) {
+  const thresholds = toThresholdArray(thresholdsLike);
   if (!thresholds || thresholds.length === 0) return 1;
   for (let i = thresholds.length - 1; i >= 0; i--) {
-    if (xp >= thresholds[i]) return i + 1;
+    if (xp >= (thresholds[i] || 0)) return i + 1;
   }
   return 1;
 }
 
-function getXPForNextLevel(currentLevel, thresholds) {
+function getXPForNextLevel(currentLevel, thresholdsLike) {
+  const thresholds = toThresholdArray(thresholdsLike);
   if (!thresholds || currentLevel >= thresholds.length) return 0;
   return thresholds[currentLevel] || 0;
 }
 
-function getCurrentLevelXP(currentLevel, thresholds) {
+function getCurrentLevelXP(currentLevel, thresholdsLike) {
+  const thresholds = toThresholdArray(thresholdsLike);
   if (!thresholds || currentLevel <= 1) return 0;
   return thresholds[currentLevel - 2] || 0;
 }
@@ -314,15 +333,19 @@ export function getUserLevelData(userId) {
     return null;
   }
 
+  const messageLevel = calculateLevel(user.xp || 0, leveling.xpThresholds);
+  const voiceLevel = calculateLevel(user.voice_xp || 0, leveling.xpThresholds);
+  const totalLevel = calculateLevel((user.xp || 0) + (user.voice_xp || 0), leveling.xpThresholds);
+
   return {
     ...user,
-    messageLevel: user.level || 0,
-    voiceLevel: user.voice_level || 0,
-    totalLevel: user.total_level || 0,
-    messageXPForNext: getXPForNextLevel(user.xp || 0, leveling.xpThresholds),
-    voiceXPForNext: getXPForNextLevel(user.voice_xp || 0, leveling.xpThresholds),
-    messageCurrentLevelXP: getCurrentLevelXP(user.xp || 0, leveling.xpThresholds),
-    voiceCurrentLevelXP: getCurrentLevelXP(user.voice_xp || 0, leveling.xpThresholds)
+    messageLevel,
+    voiceLevel,
+    totalLevel,
+    messageXPForNext: getXPForNextLevel(messageLevel, leveling.xpThresholds),
+    voiceXPForNext: getXPForNextLevel(voiceLevel, leveling.xpThresholds),
+    messageCurrentLevelXP: getCurrentLevelXP(messageLevel, leveling.xpThresholds),
+    voiceCurrentLevelXP: getCurrentLevelXP(voiceLevel, leveling.xpThresholds)
   };
 }
 
