@@ -39,6 +39,9 @@ function initializeDatabase() {
     if (!names.has('voice_time')) {
       db.exec("ALTER TABLE users ADD COLUMN voice_time INTEGER DEFAULT 0");
     }
+    if (!names.has('discriminator')) {
+      db.exec("ALTER TABLE users ADD COLUMN discriminator TEXT");
+    }
     if (!names.has('avatar')) {
       db.exec("ALTER TABLE users ADD COLUMN avatar TEXT");
     }
