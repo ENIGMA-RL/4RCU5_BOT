@@ -43,9 +43,73 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User]
 });
 
-// Initialize music player
-const player = initPlayer(client);
-const recommender = new MusicRecommender(player);
+// Initialize music player/manager (Lavalink or discord-player based on config)
+let player;
+function wireDiscordPlayerEvents(dp) {
+  try {
+    if (!dp?.events?.on) return;
+    // Music player event handlers (discord-player only)
+    dp.events.on('playerStart', async (queue) => {
+      try {
+        const guild = queue.guild;
+        const track = queue.currentTrack;
+        logger.info(`Music started: ${track.title} in ${guild.name}`);
+        const state = loadState(guild.id);
+        saveResumeState(guild.id, track.url, 0, queue.connection?.joinConfig?.channelId, queue.metadata?.channel?.id);
+        if (idleTimers.has(guild.id)) { clearTimeout(idleTimers.get(guild.id)); idleTimers.delete(guild.id); }
+      } catch (error) {
+        logger.error({ err: error }, 'Error in playerStart event');
+      }
+    });
+
+    dp.events.on('playerFinish', async (queue) => {
+      try {
+        const guild = queue.guild;
+        const state = loadState(guild.id);
+        clearResumeState(guild.id);
+        if (state.autoplay && queue.tracks.size === 0) {
+          const track = queue.currentTrack;
+          if (track) {
+            // recommender optional
+          }
+        }
+      } catch (error) {
+        logger.error({ err: error }, 'Error in playerFinish event');
+      }
+    });
+
+    dp.events.on('emptyQueue', async (queue) => {
+      try {
+        const guild = queue.guild;
+        const state = loadState(guild.id);
+        const timeout = (state.idle_timeout_sec || 300) * 1000;
+        const timer = setTimeout(async () => {
+          try { if (queue.connection) { queue.disconnect(); clearResumeState(guild.id); logger.info(`Disconnected from ${guild.name} due to idle timeout`); } } catch (error) { logger.error({ err: error }, 'Error during idle disconnect'); }
+        }, timeout);
+        idleTimers.set(guild.id, timer);
+      } catch (error) {
+        logger.error({ err: error }, 'Error in emptyQueue event');
+      }
+    });
+
+    dp.events.on('error', (queue, error) => {
+      logger.error({ err: error, guildId: queue?.guild?.id }, 'Music player error');
+    });
+  } catch (e) {
+    logger.error({ err: e }, 'Failed to wire discord-player events');
+  }
+}
+
+(async () => {
+  try {
+    player = await initPlayer(client);
+    client.music = player;
+    wireDiscordPlayerEvents(player);
+  } catch (e) {
+    logger.error({ err: e }, 'initPlayer failed');
+  }
+})();
+const recommender = null;
 
 // Store idle timers per guild
 const idleTimers = new Map();
@@ -71,92 +135,13 @@ process.on('warning', (warning) => {
 // Initialize commands collection
 client.commands = new Collection();
 
-// Music player event handlers
-player.events.on('playerStart', async (queue) => {
-  try {
-    const guild = queue.guild;
-    const track = queue.currentTrack;
-    
-    logger.info(`Music started: ${track.title} in ${guild.name}`);
-    
-    // Load guild state
-    const state = loadState(guild.id);
-    
-    // Save resume state
-    saveResumeState(guild.id, track.url, 0, queue.connection?.joinConfig?.channelId, queue.metadata?.channel?.id);
-    
-    // Discord-player handles now playing display automatically
-    
-    // Clear idle timer
-    if (idleTimers.has(guild.id)) {
-      clearTimeout(idleTimers.get(guild.id));
-      idleTimers.delete(guild.id);
-    }
-    
-  } catch (error) {
-    logger.error({ err: error }, 'Error in playerStart event');
-  }
-});
+// removed eager event wiring; handled in wireDiscordPlayerEvents after init
 
-player.events.on('playerFinish', async (queue) => {
-  try {
-    const guild = queue.guild;
-    const state = loadState(guild.id);
-    
-    // Clear resume state when track finishes
-    clearResumeState(guild.id);
-    
-    // Handle autoplay
-    if (state.autoplay && queue.tracks.size === 0) {
-      const track = queue.currentTrack;
-      if (track) {
-        const success = await recommender.addRecommendationToQueue(guild.id, track);
-        if (success) {
-          logger.info(`Added autoplay recommendation to ${guild.name}`);
-        }
-      }
-    }
-    
-  } catch (error) {
-    logger.error({ err: error }, 'Error in playerFinish event');
-  }
-});
-
-player.events.on('emptyQueue', async (queue) => {
-  try {
-    const guild = queue.guild;
-    const state = loadState(guild.id);
-    
-    // Start idle timer
-    const timeout = (state.idle_timeout_sec || 300) * 1000;
-    const timer = setTimeout(async () => {
-      try {
-        if (queue.connection) {
-          queue.disconnect();
-          clearResumeState(guild.id);
-          logger.info(`Disconnected from ${guild.name} due to idle timeout`);
-        }
-      } catch (error) {
-        logger.error({ err: error }, 'Error during idle disconnect');
-      }
-    }, timeout);
-    
-    idleTimers.set(guild.id, timer);
-    
-  } catch (error) {
-    logger.error({ err: error }, 'Error in emptyQueue event');
-  }
-});
-
-player.events.on('error', (queue, error) => {
-  logger.error({ err: error, guildId: queue.guild.id }, 'Music player error');
-});
-
-// Voice state update handler for idle management
+// Voice state update handler for idle management (discord-player only)
 client.on('voiceStateUpdate', (oldState, newState) => {
   try {
     const guild = oldState.guild;
-    const node = player.nodes.get(guild.id);
+    const node = (player && player.nodes && typeof player.nodes.get === 'function') ? player.nodes.get(guild.id) : null;
     
     if (!node || !node.connection) return;
     

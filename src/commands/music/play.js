@@ -1,4 +1,5 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
+import { musicConfig } from '../../config/configLoader.js';
 import { useMainPlayer } from 'discord-player';
 import { buildNowPlaying, formatDuration, createButtonCollector } from '../../music/nowPlayingUi.js';
 import { loadState, saveState, saveQueue, loadQueue } from '../../music/queueStore.js';
@@ -20,7 +21,7 @@ export const data = {
 
 export const execute = async (interaction) => {
   try {
-    logger.info(`Play command received: ${interaction.options.getString('query')} from ${interaction.user.id}`);
+    logger.info(`[play] received query="${interaction.options.getString('query')}" user=${interaction.user.id} guild=${interaction.guild?.id}`);
     
     const query = interaction.options.getString('query');
     const member = interaction.member;
@@ -33,29 +34,48 @@ export const execute = async (interaction) => {
       });
     }
 
-    logger.info('Deferring reply...');
+    logger.debug('[play] deferring reply');
     await interaction.deferReply();
-    logger.info('Reply deferred successfully');
+    logger.debug('[play] reply deferred');
 
+    const state = loadState(guild.id);
+
+    const cfg = musicConfig();
+    if (cfg.mode === 'lavalink') {
+      logger.debug('[play] using lavalink backend');
+      const lavalink = interaction.client?.player || interaction.client?.lavalink || interaction.client?.music;
+      const voiceChannel = member.voice.channel;
+      logger.debug(`[play] lavalink joinAndPlay start vc=${voiceChannel?.id}`);
+      const res = await lavalink.joinAndPlay(guild, voiceChannel, interaction.channel, query, interaction.user);
+      logger.debug(`[play] lavalink joinAndPlay result ok=${res?.ok} type=${res?.type}`);
+      if (!res.ok) {
+        return await interaction.editReply({ content: '❌ No tracks found for your search query.' });
+      }
+      if (res.type === 'PLAYLIST') {
+        await interaction.editReply({ content: `✅ Playing **${res.tracks.length}** tracks from playlist!` });
+      } else {
+        await interaction.editReply({ content: `✅ Playing **${res.track.info?.title || 'track'}**!` });
+      }
+      return;
+    }
+
+    // Fallback: discord-player implementation
+    logger.debug('[play] using discord-player backend');
     const player = useMainPlayer();
-    logger.info('Starting music search...');
+    logger.debug('[play] searching');
     const searchResult = await player.search(query, {
       requestedBy: interaction.user,
       searchEngine: 'auto'
     });
-    logger.info(`Search completed: ${searchResult.tracks.length} tracks found`);
+    logger.debug(`[play] search complete tracks=${searchResult?.tracks?.length || 0} hasTracks=${searchResult?.hasTracks?.()}`);
 
     if (!searchResult.hasTracks()) {
-      return await interaction.editReply({
-        content: '❌ No tracks found for your search query.'
-      });
+      return await interaction.editReply({ content: '❌ No tracks found for your search query.' });
     }
 
-    // Get or create player node
-    logger.info('Getting or creating node...');
     let node = player.nodes.get(guild.id);
     if (!node) {
-      logger.info('Creating new node...');
+      logger.debug('[play] creating node');
       node = player.nodes.create(guild.id, {
         metadata: {
           channel: interaction.channel,
@@ -68,82 +88,49 @@ export const execute = async (interaction) => {
         leaveOnStop: false,
         leaveOnEmpty: false
       });
-      logger.info('Node created successfully');
-    } else {
-      logger.info('Using existing node');
-      // Ensure the existing node is not deafened
-      if (node.connection && node.connection.voice) {
-        node.connection.voice.setSelfDeaf(false);
-        logger.info('Set existing node to not deafened');
-      }
-    }
-    
-    // Force unmute the bot after connection
-    if (node.connection && node.connection.voice) {
-      await node.connection.voice.setSelfDeaf(false);
-      await node.connection.voice.setSelfMute(false);
-      logger.info('Forced bot to be unmuted and undeafened');
+      logger.debug('[play] node created');
+    } else if (node.connection && node.connection.voice) {
+      node.connection.voice.setSelfDeaf(false);
+      logger.debug('[play] reused node, ensured undeafened');
     }
 
-    // Connect to voice channel
     if (!node.connection) {
-      logger.info('Connecting to voice channel...');
+      logger.debug(`[play] connecting to voice channel vc=${member.voice.channel?.id}`);
       await node.connect(member.voice.channel);
-      logger.info('Connected to voice channel successfully');
-      
-      // Force unmute after connection
       if (node.connection && node.connection.voice) {
         await node.connection.voice.setSelfDeaf(false);
         await node.connection.voice.setSelfMute(false);
-        logger.info('Forced bot to be unmuted and undeafened after connection');
       }
-    } else {
-      logger.info('Already connected to voice channel');
+      logger.debug('[play] connected to voice');
     }
 
-    // Wait a moment for the node to be fully initialized
     await new Promise(resolve => setTimeout(resolve, 100));
+    logger.trace?.('[play] post-connect settle done');
 
-    // Load guild state
-    const state = loadState(guild.id);
     node.volume = state.volume;
+    logger.debug(`[play] set volume=${state.volume}`);
 
-    // Add tracks to queue
     const tracks = searchResult.tracks;
     const isPlaylist = searchResult.playlist;
-    
-    // Play the tracks directly
+
     try {
-      logger.info('Starting to play tracks...');
       if (isPlaylist) {
-        logger.info('Playing playlist...');
+        logger.debug('[play] playing playlist');
         await node.play(tracks);
-        logger.info('Playlist started, sending reply...');
-        await interaction.editReply({
-          content: `✅ Playing **${tracks.length}** tracks from **${searchResult.playlist?.title || 'playlist'}**!`
-        });
-        logger.info('Playlist reply sent');
+        await interaction.editReply({ content: `✅ Playing **${tracks.length}** tracks from **${searchResult.playlist?.title || 'playlist'}**!` });
       } else {
-        logger.info('Playing single track...');
-        logger.info(`Track details: Title="${tracks[0].title}", Artist="${tracks[0].author}", URL="${tracks[0].url}"`);
-        logger.info(`Track source: ${tracks[0].source}, Duration: ${tracks[0].duration}`);
+        logger.debug(`[play] playing single title="${tracks[0]?.title}" source=${tracks[0]?.source}`);
         await node.play(tracks[0]);
-        logger.info('Single track started, sending reply...');
-        await interaction.editReply({
-          content: `✅ Playing **${tracks[0].title}**!`
-        });
-        logger.info('Single track reply sent');
+        await interaction.editReply({ content: `✅ Playing **${tracks[0].title}**!` });
       }
     } catch (error) {
-      logger.error({ err: error }, 'Error playing tracks');
-      return await interaction.editReply({
-        content: '❌ Failed to play music. Please try again.'
-      });
+      logger.error({ err: error, guildId: guild.id }, '[play] error during node.play');
+      return await interaction.editReply({ content: '❌ Failed to play music. Please try again.' });
     }
 
-    // Save queue to database (if queue is available)
     try {
       if (node.queue && node.queue.tracks) {
+        logger.debug(`[play] saving queue size=${node.queue.tracks.length ?? node.queue.tracks.size ?? 0}`);
         const queueTracks = node.queue.tracks.map(track => ({
           title: track.title,
           url: track.url,
@@ -155,12 +142,9 @@ export const execute = async (interaction) => {
         saveQueue(guild.id, queueTracks);
       }
     } catch (error) {
-      logger.warn({ err: error }, 'Could not save queue to database');
+      logger.warn({ err: error }, '[play] could not save queue');
     }
 
-    // The tracks should start playing automatically when added to the queue
-
-    // Send now playing embed with full UI
     try {
       const track = node.currentTrack;
       if (track) {
@@ -170,18 +154,19 @@ export const execute = async (interaction) => {
           embeds: [nowPlaying.embed],
           components: nowPlaying.components
         });
-        
-        // Create button collector for interactions
         if (message) {
+          // Wire button collector for controls if present
+          // It expects discord-player
           createButtonCollector(interaction, player, guild.id);
+          logger.debug('[play] button collector attached');
         }
       }
     } catch (error) {
-      logger.warn({ err: error }, 'Could not send now playing embed');
+      logger.warn({ err: error }, '[play] could not send now playing');
     }
 
   } catch (error) {
-    logger.error({ err: error }, 'Error in play command');
+    logger.error({ err: error, userId: interaction?.user?.id, guildId: interaction?.guild?.id }, '[play] unhandled error');
     await interaction.editReply({
       content: '❌ An error occurred while trying to play music.'
     });

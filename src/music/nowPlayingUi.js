@@ -1,6 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import logger from '../utils/logger.js';
-import { loadState } from './queueStore.js';
+import { loadState, saveState } from './queueStore.js';
 
 export function progressBar(posMs, durMs, size = 18) {
   const p = Math.max(0, Math.min(1, durMs ? posMs / durMs : 0));
@@ -190,7 +190,7 @@ export function createButtonCollector(interaction, player, guildId, timeout = 30
       const action = buttonInteraction.customId.split(':')[1];
       logger.info(`Button action: ${action}`);
       const node = player.nodes.get(guildId);
-      const queue = player.queues.get(guildId) || player.nodes.get(guildId);
+      const queue = player.queues?.get?.(guildId) || player.nodes.get(guildId);
       logger.info(`Node found: ${!!node}, Guild ID: ${guildId}`);
       
       if (!node) {
@@ -214,10 +214,12 @@ export function createButtonCollector(interaction, player, guildId, timeout = 30
           try {
             const qp = queue?.node || node;
             if (!qp) throw new Error('Queue/Node not available');
-            if (qp.isPaused && qp.isPaused()) {
-              qp.resume();
-              await buttonInteraction.followUp({ content: '▶️ Resumed music!', ephemeral: true });
-            } else if (qp.pause) {
+            if (typeof qp.isPaused === 'function' && qp.isPaused()) {
+              if (typeof qp.resume === 'function') {
+                qp.resume();
+                await buttonInteraction.followUp({ content: '▶️ Resumed music!', ephemeral: true });
+              }
+            } else if (typeof qp.pause === 'function') {
               qp.pause();
               await buttonInteraction.followUp({ content: '⏸️ Paused music!', ephemeral: true });
             }
@@ -248,6 +250,10 @@ export function createButtonCollector(interaction, player, guildId, timeout = 30
             const newMode = currentMode === 0 ? 1 : currentMode === 1 ? 2 : 0;
             if (q?.setRepeatMode) q.setRepeatMode(newMode);
             const modeText = newMode === 0 ? 'off' : newMode === 1 ? 'track' : 'queue';
+            // persist
+            const st = loadState(guildId);
+            st.loop_mode = modeText;
+            saveState(guildId, st);
             await buttonInteraction.followUp({ content: `🔁 Loop set to ${modeText}!`, ephemeral: true });
             await updateNowPlayingEmbed(buttonInteraction, node, player, guildId);
           } catch (error) {
@@ -300,10 +306,14 @@ export function createButtonCollector(interaction, player, guildId, timeout = 30
             // Toggle autoplay
             const currentAutoplay = node.autoplay;
             node.autoplay = !currentAutoplay;
+            const st = loadState(guildId);
+            st.autoplay = !currentAutoplay;
+            saveState(guildId, st);
             await buttonInteraction.followUp({ 
               content: `🎵 Autoplay ${!currentAutoplay ? 'enabled' : 'disabled'}!`, 
               ephemeral: true 
             });
+            await updateNowPlayingEmbed(buttonInteraction, node, player, guildId);
           } catch (error) {
             logger.error({ err: error }, 'Error in autoplay button');
             await buttonInteraction.followUp({ content: '❌ Error toggling autoplay!', ephemeral: true });

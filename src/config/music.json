@@ -1,0 +1,19 @@
+{
+  "mode": "lavalink",
+  "lavalink": {
+    "nodes": [
+      {
+        "name": "main",
+        "host": "localhost",
+        "port": 2333,
+        "password": "youshallnotpass",
+        "secure": false
+      }
+    ],
+    "resume": true,
+    "resumeKey": "cnsbot",
+    "resumeTimeout": 60,
+    "defaultVolume": 80
+  }
+}
+

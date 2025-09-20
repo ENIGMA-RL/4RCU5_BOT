@@ -1,4 +1,5 @@
 import { EmbedBuilder } from 'discord.js';
+import { musicConfig } from '../../config/configLoader.js';
 import { useMainPlayer } from 'discord-player';
 import logger from '../../utils/logger.js';
 
@@ -13,6 +14,25 @@ export const execute = async (interaction) => {
   try {
     const guild = interaction.guild;
     const member = interaction.member;
+
+    const cfg = musicConfig();
+    if (cfg.mode === 'lavalink') {
+      const lavalink = interaction.client.music;
+      const player = lavalink.manager.players.get(guild.id);
+      if (!player || (!player.playing && !player.paused)) {
+        return await interaction.reply({ content: '❌ No music is currently playing.', flags: 64 });
+      }
+      if (member.voice.channelId !== player.voiceChannelId) {
+        return await interaction.reply({ content: '❌ You need to be in the same voice channel as the bot to control playback.', flags: 64 });
+      }
+      if (player.paused) {
+        return await interaction.reply({ content: '❌ The music is already paused.', flags: 64 });
+      }
+      await player.pause(true);
+      const title = player.currentTrack?.info?.title || 'current track';
+      const embed = new EmbedBuilder().setTitle('⏸️ Music Paused').setDescription(`Paused **${title}**`).setColor(0x5865F2).setTimestamp();
+      return await interaction.reply({ embeds: [embed] });
+    }
 
     const player = useMainPlayer();
     const node = player.nodes.get(guild.id);

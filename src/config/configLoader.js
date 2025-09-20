@@ -141,6 +141,24 @@ const oauthSchema = z.object({
   strategy: z.enum(['bot', 'oauth']).optional()
 }).passthrough();
 
+// Minimal validation for music config to allow environment overrides
+const musicSchema = z.object({
+  mode: z.enum(['lavalink', 'discord-player']).optional(),
+  lavalink: z.object({
+    nodes: z.array(z.object({
+      name: z.string().optional(),
+      host: z.string(),
+      port: z.number(),
+      password: z.string(),
+      secure: z.boolean().optional()
+    })).optional(),
+    resume: z.boolean().optional(),
+    resumeKey: z.string().optional(),
+    resumeTimeout: z.number().optional(),
+    defaultVolume: z.number().optional()
+  }).optional()
+}).passthrough();
+
 const schemaMap = {
   bot: botSchema,
   channels: channelsSchema,
@@ -151,7 +169,8 @@ const schemaMap = {
   giveaway: giveawaySchema,
   vcSettings: vcSettingsSchema,
   events: eventsSchema,
-  oauth: oauthSchema
+  oauth: oauthSchema,
+  music: musicSchema
 };
 
 function readJson(filePath) {
@@ -233,3 +252,4 @@ export const staffConfig = () => loadConfig('staff');
 export const ticketsConfig = () => loadConfig('tickets');
 export const vcSettingsConfig = () => loadConfig('vcSettings');
 export const giveawayConfig = () => loadConfig('giveaway'); 
+export const musicConfig = () => loadConfig('music');
