@@ -1,6 +1,8 @@
 import { ApplicationCommandOptionType, EmbedBuilder } from 'discord.js';
 import { rolesConfig } from '../../config/configLoader.js';
-import { markUserActive, markUserLeftServer } from '../../repositories/usersAdminRepo.js';
+import db from '../../database/connection.js';
+import { getAllUsers, markUserActive, markUserLeftServer } from '../../repositories/usersAdminRepo.js';
+import { allowLeftReset, clearLeftReset, createUser } from '../../repositories/usersRepo.js';
 
 export const data = {
   name: 'set-activity-status',
@@ -37,9 +39,9 @@ export const execute = async (interaction) => {
     await interaction.deferReply({ flags: 64 });
 
     if (action === 'status') {
-      // Show current status
-      const { getUsersWhoLeftServer } = await import('../../database/db.js');
-      const leftUsers = getUsersWhoLeftServer();
+      const leftUsers = db
+        .prepare("SELECT user_id, username FROM users WHERE COALESCE(left_server,0)=1")
+        .all();
       
       const embed = new EmbedBuilder()
         .setTitle('📊 Current Activity Status')
@@ -58,54 +60,61 @@ export const execute = async (interaction) => {
       await interaction.editReply({ embeds: [embed] });
       
     } else if (action === 'set') {
-      // Refresh activity status by checking each user
       const guild = interaction.guild;
-      const { getAllUsers, markUserActive, markUserLeftServer } = await import('../../database/db.js');
-      
-      // Get all users from database
+      try { await guild.members.fetch(); } catch {}
+
       const allUsers = getAllUsers();
-      
+      const presentIds = new Set(guild.members.cache.keys());
+
       let activeCount = 0;
       let leftCount = 0;
+      let addedCount = 0;
       let errorCount = 0;
-      
+
+      for (const memberId of presentIds) {
+        try {
+          const m = guild.members.cache.get(memberId);
+          createUser(memberId, m?.user?.username ?? null, null, m?.user?.displayAvatarURL?.({ extension: 'png' }) ?? null);
+          try { allowLeftReset(memberId); } catch {}
+          try { markUserActive(memberId); activeCount++; } catch { errorCount++; }
+          try { clearLeftReset(memberId); } catch {}
+          addedCount++;
+        } catch {
+          addedCount = Math.max(0, addedCount - 1);
+        }
+      }
+
       for (const user of allUsers) {
         try {
-          // Check if user is currently in the server
-          const guildMember = guild.members.cache.get(user.user_id);
-          
-          if (guildMember) {
-            // User is in server, mark as active
+          if (presentIds.has(user.user_id)) {
+            try { allowLeftReset(user.user_id); } catch {}
             markUserActive(user.user_id);
+            try { clearLeftReset(user.user_id); } catch {}
             activeCount++;
           } else {
-            // User is not in server, mark as left
             markUserLeftServer(user.user_id);
             leftCount++;
           }
         } catch (error) {
-          console.error(`Error processing user ${user.user_id}:`, error);
           errorCount++;
         }
       }
-      
+
       const embed = new EmbedBuilder()
         .setTitle('🔄 Activity Status Refresh Complete')
-        .setDescription(`Successfully updated activity status for all users.`)
+        .setDescription('Successfully updated activity status for all users.')
         .setColor('#00ff00')
         .setTimestamp()
         .addFields(
-          { name: '✅ Active Users', value: `${activeCount} users marked as active`, inline: true },
-          { name: '🚪 Left Users', value: `${leftCount} users marked as left server`, inline: true }
+          { name: '✅ Marked Active', value: `${activeCount}`, inline: true },
+          { name: '🚪 Marked Left', value: `${leftCount}`, inline: true },
+          { name: '➕ Added Missing', value: `${addedCount}`, inline: true }
         );
-      
+
       if (errorCount > 0) {
-        embed.addFields({
-          name: '⚠️ Errors',
-          value: `${errorCount} users had errors during processing.`
-        });
+        embed.addFields({ name: '⚠️ Errors', value: `${errorCount}` });
       }
-      
+
       await interaction.editReply({ embeds: [embed] });
     }
     
