@@ -1,7 +1,7 @@
 // Imports and setup
 import { ApplicationCommandOptionType, AttachmentBuilder } from 'discord.js';
 import { createCanvas, loadImage, registerFont } from 'canvas';
-import { getUserLevelData, getServerRankActiveGuildAware } from '../../features/leveling/levelingSystem.js';
+import { getUserLevelData, getServerRankActiveGuildAware, calculateLevel as calcLvl } from '../../features/leveling/levelingSystem.js';
 import db from '../../database/connection.js';
 import { getServerRankActive } from '../../features/leveling/levelingSystem.js';
 import fs from 'fs';
@@ -209,17 +209,13 @@ async function createRankCard(user, userData, serverRank, xpThresholds) {
   ctx.textAlign = 'left';
   ctx.fillText(user.username, textStartX, y);
 
-  // Calculate total level and thresholds
+  // Calculate total level using the same helper as leveling system to avoid mismatches
   const totalXP = (userData.xp || 0) + (userData.voice_xp || 0);
-  for (let i = 0; i < levels.length; i++) {
-    if (totalXP >= xpThresholds[levels[i]]) {
-      totalLevel = levels[i];
-      prevThreshold = xpThresholds[levels[i]];
-      nextThreshold = xpThresholds[levels[i + 1]] || prevThreshold + 100;
-    } else {
-      break;
-    }
-  }
+  totalLevel = calcLvl(totalXP, xpThresholds);
+  // Derive prev/next thresholds for display
+  const nearestLevelKey = levels.find(l => l === totalLevel) || levels[0];
+  prevThreshold = xpThresholds[Math.max(1, totalLevel - 1)] || 0;
+  nextThreshold = xpThresholds[totalLevel] || (prevThreshold + 100);
 
   // Show levelUpRole title below username if available
   const levelUpRoles = levelSettingsConfig().leveling.levelUpRoles;
