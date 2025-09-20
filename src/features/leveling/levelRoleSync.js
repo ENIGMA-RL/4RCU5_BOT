@@ -37,6 +37,11 @@ export async function syncLevelRoles(guild) {
       const userTotalLevel = userData?.totalLevel || 0;
       const userXP = (userData?.xp || 0) + (userData?.voice_xp || 0);
       
+      // DEBUG: Log user data for debugging
+      if (member.user.username === 'Rin' || member.user.username === 'erf_1.11') {
+        console.log(`[DEBUG] ${member.user.username}: XP=${userXP}, Level=${userTotalLevel}, Roles=${member.roles.cache.map(r => r.name).join(', ')}`);
+      }
+      
       // Find the highest role for their total level
       let correctRoleId = null;
       let correctLevel = null;
@@ -45,6 +50,11 @@ export async function syncLevelRoles(guild) {
           correctRoleId = roleId;
           correctLevel = level;
         }
+      }
+      
+      // DEBUG: Log role assignment for debugging
+      if (member.user.username === 'Rin' || member.user.username === 'erf_1.11') {
+        console.log(`[DEBUG] ${member.user.username}: Should have role level ${correctLevel} (roleId: ${correctRoleId})`);
       }
       
       // Remove all level roles except persistent roles and the correct one
@@ -61,6 +71,17 @@ export async function syncLevelRoles(guild) {
               await logRoleChange(guild.client, member.id, member.user.tag, 'Removed', role.name, 'Automated level role sync');
             }
             console.log(`[AUTO-SYNC] Removed roleId=${roleId} from ${member.user.tag}`);
+            
+            // DEBUG: Log removal for specific user
+            if (member.user.username === 'Rin' || member.user.username === 'erf_1.11') {
+              console.log(`[DEBUG] REMOVED role ${role?.name} from ${member.user.username}`);
+            }
+          } else {
+            // DEBUG: Log persistent role
+            if (member.user.username === 'Rin' || member.user.username === 'erf_1.11') {
+              const role = guild.roles.cache.get(roleId);
+              console.log(`[DEBUG] KEPT persistent role ${role?.name} for ${member.user.username}`);
+            }
           }
         }
       }
@@ -74,6 +95,17 @@ export async function syncLevelRoles(guild) {
           await logRoleChange(guild.client, member.id, member.user.tag, 'Assigned', role.name, 'Automated level role sync');
         }
         console.log(`[AUTO-SYNC] Added roleId=${correctRoleId} to ${member.user.tag}`);
+        
+        // DEBUG: Log addition for specific user
+        if (member.user.username === 'Rin' || member.user.username === 'erf_1.11') {
+          console.log(`[DEBUG] ADDED role ${role?.name} to ${member.user.username}`);
+        }
+      } else if (correctRoleId && member.roles.cache.has(correctRoleId)) {
+        // DEBUG: Log already has correct role
+        if (member.user.username === 'Rin' || member.user.username === 'erf_1.11') {
+          const role = guild.roles.cache.get(correctRoleId);
+          console.log(`[DEBUG] ALREADY HAS correct role ${role?.name} for ${member.user.username}`);
+        }
       }
     }
 
