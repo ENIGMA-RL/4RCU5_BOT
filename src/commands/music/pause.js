@@ -32,7 +32,7 @@ export const execute = async (interaction) => {
       });
     }
 
-    if (node.isPaused()) {
+    if (node.isPaused && node.isPaused()) {
       return await interaction.reply({
         content: '❌ The music is already paused.',
         flags: 64

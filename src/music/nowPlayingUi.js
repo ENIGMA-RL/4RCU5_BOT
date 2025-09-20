@@ -1,5 +1,6 @@
 import { ActionRowBuilder, ButtonBuilder, ButtonStyle, EmbedBuilder } from 'discord.js';
 import logger from '../utils/logger.js';
+import { loadState } from './queueStore.js';
 
 export function progressBar(posMs, durMs, size = 18) {
   const p = Math.max(0, Math.min(1, durMs ? posMs / durMs : 0));
@@ -28,8 +29,28 @@ export function getSourceIcon(source) {
 }
 
 export function buildNowPlaying(track, state, queuePosition = 0, queueLength = 0) {
+  // Format duration properly
+  let duration = 'Unknown';
+  if (track.duration) {
+    if (typeof track.duration === 'string') {
+      // If duration is already a string like "3:45"
+      duration = track.duration;
+    } else if (track.duration.seconds) {
+      // If duration has seconds property
+      duration = formatDuration(track.duration.seconds * 1000);
+    } else if (typeof track.duration === 'number') {
+      // If duration is a number (milliseconds)
+      duration = formatDuration(track.duration);
+    }
+  }
+
+  // Get artist information
+  const artist = track.author || track.artist || track.uploader || 'Unknown Artist';
+  const title = track.title || 'Unknown Title';
+
   const embed = new EmbedBuilder()
-    .setTitle(track.title)
+    .setTitle(title)
+    .setDescription(`by **${artist}**`)
     .setURL(track.url)
     .setThumbnail(track.thumbnail || track.thumb)
     .setColor(0x5865F2)
@@ -41,7 +62,7 @@ export function buildNowPlaying(track, state, queuePosition = 0, queueLength = 0
       },
       { 
         name: "Duration", 
-        value: track.duration ? formatDuration(track.duration.seconds * 1000) : 'Unknown', 
+        value: duration, 
         inline: true 
       },
       { 
@@ -163,12 +184,17 @@ export function createButtonCollector(interaction, player, guildId, timeout = 30
 
   collector.on('collect', async (buttonInteraction) => {
     try {
+      logger.info(`Button interaction received: ${buttonInteraction.customId} from user ${buttonInteraction.user.id}`);
       await buttonInteraction.deferUpdate();
       
       const action = buttonInteraction.customId.split(':')[1];
+      logger.info(`Button action: ${action}`);
       const node = player.nodes.get(guildId);
+      const queue = player.queues.get(guildId) || player.nodes.get(guildId);
+      logger.info(`Node found: ${!!node}, Guild ID: ${guildId}`);
       
       if (!node) {
+        logger.warn('No node found for button interaction');
         await buttonInteraction.followUp({ 
           content: '❌ No music is currently playing.', 
           ephemeral: true 
@@ -176,45 +202,112 @@ export function createButtonCollector(interaction, player, guildId, timeout = 30
         return;
       }
 
+
       switch (action) {
         case 'back':
-          if (node.queue.history.size > 0) {
-            node.history.back();
+          if (queue?.history?.size > 0 && queue?.history?.back) {
+            queue.history.back();
           }
           break;
           
         case 'pause':
-          if (node.isPaused()) {
-            node.resume();
-          } else {
-            node.pause();
+          try {
+            const qp = queue?.node || node;
+            if (!qp) throw new Error('Queue/Node not available');
+            if (qp.isPaused && qp.isPaused()) {
+              qp.resume();
+              await buttonInteraction.followUp({ content: '▶️ Resumed music!', ephemeral: true });
+            } else if (qp.pause) {
+              qp.pause();
+              await buttonInteraction.followUp({ content: '⏸️ Paused music!', ephemeral: true });
+            }
+            await updateNowPlayingEmbed(buttonInteraction, qp, player, guildId);
+          } catch (error) {
+            logger.error({ err: error }, 'Error in pause button');
+            await buttonInteraction.followUp({ content: '❌ Error pausing music!', ephemeral: true });
           }
           break;
           
         case 'skip':
-          node.skip();
+          try {
+            const qp = queue?.node || node;
+            if (qp?.skip) {
+              qp.skip();
+              await buttonInteraction.followUp({ content: '⏭️ Skipped to next track!', ephemeral: true });
+            }
+          } catch (error) {
+            logger.error({ err: error }, 'Error in skip button');
+            await buttonInteraction.followUp({ content: '❌ Error skipping music!', ephemeral: true });
+          }
           break;
           
         case 'loop':
-          const currentMode = node.repeatMode;
-          const newMode = currentMode === 0 ? 1 : currentMode === 1 ? 2 : 0;
-          node.setRepeatMode(newMode);
+          try {
+            const q = player.queues.get(guildId) || node?.queue;
+            const currentMode = q?.repeatMode ?? 0;
+            const newMode = currentMode === 0 ? 1 : currentMode === 1 ? 2 : 0;
+            if (q?.setRepeatMode) q.setRepeatMode(newMode);
+            const modeText = newMode === 0 ? 'off' : newMode === 1 ? 'track' : 'queue';
+            await buttonInteraction.followUp({ content: `🔁 Loop set to ${modeText}!`, ephemeral: true });
+            await updateNowPlayingEmbed(buttonInteraction, node, player, guildId);
+          } catch (error) {
+            logger.error({ err: error }, 'Error in loop button');
+            await buttonInteraction.followUp({ content: '❌ Error setting loop!', ephemeral: true });
+          }
           break;
           
         case 'stop':
-          node.stop();
+          try {
+            if (node.delete) {
+              node.delete();
+              await buttonInteraction.followUp({ content: '⏹️ Stopped music!', ephemeral: true });
+            }
+          } catch (error) {
+            logger.error({ err: error }, 'Error in stop button');
+            await buttonInteraction.followUp({ content: '❌ Error stopping music!', ephemeral: true });
+          }
           break;
           
         case 'shuffle':
-          node.queue.tracks.shuffle();
+          try {
+            const q = player.queues.get(guildId) || node?.queue;
+            if (q?.tracks?.shuffle) {
+              q.tracks.shuffle();
+              await buttonInteraction.followUp({ content: '🔀 Shuffled queue!', ephemeral: true });
+            }
+          } catch (error) {
+            logger.error({ err: error }, 'Error in shuffle button');
+            await buttonInteraction.followUp({ content: '❌ Error shuffling queue!', ephemeral: true });
+          }
           break;
           
         case 'queue':
-          // Show queue - this would need to be implemented
+          try {
+            const q = player.queues.get(guildId) || node?.queue;
+            const queueSize = q?.tracks?.size || 0;
+            await buttonInteraction.followUp({ 
+              content: `📋 Queue has ${queueSize} tracks. Use \`/queue\` command for full details!`, 
+              ephemeral: true 
+            });
+          } catch (error) {
+            logger.error({ err: error }, 'Error in queue button');
+            await buttonInteraction.followUp({ content: '❌ Error showing queue!', ephemeral: true });
+          }
           break;
           
         case 'autoplay':
-          // Toggle autoplay - this would need to be implemented
+          try {
+            // Toggle autoplay
+            const currentAutoplay = node.autoplay;
+            node.autoplay = !currentAutoplay;
+            await buttonInteraction.followUp({ 
+              content: `🎵 Autoplay ${!currentAutoplay ? 'enabled' : 'disabled'}!`, 
+              ephemeral: true 
+            });
+          } catch (error) {
+            logger.error({ err: error }, 'Error in autoplay button');
+            await buttonInteraction.followUp({ content: '❌ Error toggling autoplay!', ephemeral: true });
+          }
           break;
       }
       
@@ -232,4 +325,22 @@ export function createButtonCollector(interaction, player, guildId, timeout = 30
   });
 
   return collector;
+}
+
+// Function to update the now playing embed
+async function updateNowPlayingEmbed(interaction, node, player, guildId) {
+  try {
+    const state = loadState(guildId);
+    const track = node.currentTrack;
+    if (track) {
+      const queueSize = node.queue?.tracks?.size || 0;
+      const nowPlaying = buildNowPlaying(track, state, 0, queueSize);
+      await interaction.message.edit({
+        embeds: [nowPlaying.embed],
+        components: nowPlaying.components
+      });
+    }
+  } catch (error) {
+    logger.error({ err: error }, 'Error updating now playing embed');
+  }
 }

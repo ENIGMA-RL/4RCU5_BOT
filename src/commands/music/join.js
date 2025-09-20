@@ -31,7 +31,7 @@ export const execute = async (interaction) => {
           client: guild.members.me,
           requestedBy: interaction.user
         },
-        selfDeaf: true,
+        selfDeaf: false,
         volume: 80,
         leaveOnEnd: false,
         leaveOnStop: false,

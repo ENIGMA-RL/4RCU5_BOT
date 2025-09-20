@@ -85,17 +85,7 @@ player.events.on('playerStart', async (queue) => {
     // Save resume state
     saveResumeState(guild.id, track.url, 0, queue.connection?.joinConfig?.channelId, queue.metadata?.channel?.id);
     
-    // Send now playing embed
-    const nowPlaying = buildNowPlaying(track, state, 0, queue.tracks.size);
-    const message = await queue.metadata?.channel?.send({
-      embeds: [nowPlaying.embed],
-      components: nowPlaying.components
-    });
-    
-    // Create button collector
-    if (message) {
-      createButtonCollector({ user: queue.metadata?.requestedBy, channel: queue.metadata?.channel }, player, guild.id);
-    }
+    // Discord-player handles now playing display automatically
     
     // Clear idle timer
     if (idleTimers.has(guild.id)) {
@@ -394,7 +384,7 @@ client.once('ready', async () => {
                 client: guild.members.me,
                 requestedBy: guild.members.me
               },
-              selfDeaf: true,
+              selfDeaf: false,
               volume: 80,
               leaveOnEnd: false,
               leaveOnStop: false,
