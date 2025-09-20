@@ -29,17 +29,18 @@ export const execute = async (interaction) => {
     const guild = interaction.guild;
     try { await guild.members.fetch(); } catch {}
 
-    const allUsers = getAllUsers();
+		const allUsers = getAllUsers();
     const allDbUserIds = new Set(allUsers.map(u => u.user_id));
     const presentMemberIds = new Set(guild.members.cache.keys());
 
-    let activeCount = 0;
-    let leftCount = 0;
-    let addedCount = 0;
-    let errorCount = 0;
+		let activeCount = 0;
+		let leftCount = 0;
+		let addedCount = 0;
+		let errorCount = 0;
+		const errorSamples = new Map();
 
     // 1) Ensure every present member exists in DB and is marked active
-    for (const memberId of presentMemberIds) {
+		for (const memberId of presentMemberIds) {
       try {
         const member = guild.members.cache.get(memberId);
         const res = createUser(
@@ -52,24 +53,24 @@ export const execute = async (interaction) => {
           addedCount++;
         }
         try { allowLeftReset(memberId); } catch {}
-        try { markUserActive(memberId); activeCount++; } catch { errorCount++; }
+				try { markUserActive(memberId); activeCount++; } catch (e) { errorCount++; if (e?.message) errorSamples.set(e.message, (errorSamples.get(e.message)||0)+1); }
         try { clearLeftReset(memberId); } catch {}
       } catch (err) {
-        errorCount++; 
+				errorCount++; if (err?.message) errorSamples.set(err.message, (errorSamples.get(err.message)||0)+1);
       }
     }
 
     // 2) For every DB user, mark left if not present in guild
-    for (const userId of allDbUserIds) {
-      if (presentMemberIds.has(userId)) continue;
-      try {
-        markUserLeftServer(userId);
-        leftCount++;
-      } catch (error) {
-        logger.error({ err: error, userId }, 'Error marking user left');
-        errorCount++;
-      }
-    }
+		for (const userId of allDbUserIds) {
+			if (presentMemberIds.has(userId)) continue;
+			try {
+				markUserLeftServer(userId);
+				leftCount++;
+			} catch (error) {
+				logger.error({ err: error, userId }, 'Error marking user left');
+				errorCount++; if (error?.message) errorSamples.set(error.message, (errorSamples.get(error.message)||0)+1);
+			}
+		}
 
 		const embed = new EmbedBuilder()
 			.setTitle('🔄 Activity Status Sync Complete')
@@ -82,12 +83,15 @@ export const execute = async (interaction) => {
         { name: '➕ Added Missing', value: `${addedCount}`, inline: true }
       );
 
-    // Optionally surface cache vs. server count to help diagnose missing Member Intent
-    const cacheCount = presentMemberIds.size;
-    const serverCount = guild.memberCount ?? cacheCount;
-    if (serverCount && cacheCount !== serverCount) {
-      embed.addFields({ name: 'ℹ️ Scanned vs Server Count', value: `${cacheCount} / ${serverCount}`, inline: true });
-    }
+		// Diagnostics: cache vs server counts, DB size, and sample errors
+		const cacheCount = presentMemberIds.size;
+		const serverCount = guild.memberCount ?? cacheCount;
+		embed.addFields({ name: 'ℹ️ Counts', value: `Cache: ${cacheCount} • Server: ${serverCount} • DB: ${allUsers.length}`, inline: true });
+		if (errorCount > 0 && errorSamples.size > 0) {
+			const samples = Array.from(errorSamples.entries()).slice(0, 3)
+				.map(([msg, n]) => `• ${msg} (${n})`).join('\n');
+			embed.addFields({ name: '⚠️ Sample Errors', value: samples });
+		}
 
 		if (errorCount > 0) {
 			embed.addFields({ name: '⚠️ Errors', value: `${errorCount}` });
