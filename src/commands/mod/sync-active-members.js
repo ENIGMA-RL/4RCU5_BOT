@@ -30,6 +30,7 @@ export const execute = async (interaction) => {
     try { await guild.members.fetch(); } catch {}
 
     const allUsers = getAllUsers();
+    const allDbUserIds = new Set(allUsers.map(u => u.user_id));
     const presentMemberIds = new Set(guild.members.cache.keys());
 
     let activeCount = 0;
@@ -37,42 +38,35 @@ export const execute = async (interaction) => {
     let addedCount = 0;
     let errorCount = 0;
 
-    // 1) Add any missing present members into DB and mark active
+    // 1) Ensure every present member exists in DB and is marked active
     for (const memberId of presentMemberIds) {
       try {
-        // Upsert (INSERT OR IGNORE)
         const member = guild.members.cache.get(memberId);
-        createUser(
+        const res = createUser(
           memberId,
           member?.user?.username ?? null,
           null,
           member?.user?.displayAvatarURL?.({ extension: 'png' }) ?? null
         );
-        // Safely clear left flag if needed
+        if (res && typeof res.changes === 'number' && res.changes > 0) {
+          addedCount++;
+        }
         try { allowLeftReset(memberId); } catch {}
-        try { markUserActive(memberId); activeCount++; } catch (e) { errorCount++; }
+        try { markUserActive(memberId); activeCount++; } catch { errorCount++; }
         try { clearLeftReset(memberId); } catch {}
-        addedCount++;
       } catch (err) {
-        // If already existed, addedCount might be overstated; adjust conservatively
-        addedCount = Math.max(0, addedCount - 1);
+        errorCount++; 
       }
     }
 
-    // 2) For every DB user, mark left if not present; otherwise ensure active
-    for (const user of allUsers) {
+    // 2) For every DB user, mark left if not present in guild
+    for (const userId of allDbUserIds) {
+      if (presentMemberIds.has(userId)) continue;
       try {
-        if (presentMemberIds.has(user.user_id)) {
-          try { allowLeftReset(user.user_id); } catch {}
-          markUserActive(user.user_id);
-          try { clearLeftReset(user.user_id); } catch {}
-          activeCount++;
-        } else {
-          markUserLeftServer(user.user_id);
-          leftCount++;
-        }
+        markUserLeftServer(userId);
+        leftCount++;
       } catch (error) {
-        logger.error({ err: error, userId: user.user_id }, 'Error processing user');
+        logger.error({ err: error, userId }, 'Error marking user left');
         errorCount++;
       }
     }
@@ -87,6 +81,13 @@ export const execute = async (interaction) => {
         { name: '🚪 Marked Left', value: `${leftCount}`, inline: true },
         { name: '➕ Added Missing', value: `${addedCount}`, inline: true }
       );
+
+    // Optionally surface cache vs. server count to help diagnose missing Member Intent
+    const cacheCount = presentMemberIds.size;
+    const serverCount = guild.memberCount ?? cacheCount;
+    if (serverCount && cacheCount !== serverCount) {
+      embed.addFields({ name: 'ℹ️ Scanned vs Server Count', value: `${cacheCount} / ${serverCount}`, inline: true });
+    }
 
 		if (errorCount > 0) {
 			embed.addFields({ name: '⚠️ Errors', value: `${errorCount}` });
