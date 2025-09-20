@@ -3,7 +3,7 @@ import { staffConfig } from '../config/configLoader.js';
 import { giveawayConfig } from '../config/configLoader.js';
 import { recordRoleFirstSeen } from '../repositories/tagRepo.js';
 import logger from '../utils/logger.js';
-import { syncUserTagRole, clearTagStatusCache } from '../features/tagSync/tagSyncService.js';
+import { syncUserTagRole } from '../features/tagSync/tagSyncService.js';
 
 export const name = 'guildMemberUpdate';
 export const once = false;
@@ -27,7 +27,6 @@ export async function execute(oldMember, newMember) {
     logger.info(`🔧 [DEBUG] Scheduling tag sync for user ${newMember.user.tag} in 3 seconds...`);
     setTimeout(async () => {
       try {
-        try { clearTagStatusCache(newMember.id); } catch {}
         logger.info(`🔧 [DEBUG] Executing tag sync for user ${newMember.user.tag}...`);
         const result = await syncUserTagRole(newMember.id, newMember.guild, newMember.client);
         logger.info({ result }, `🔧 [DEBUG] Tag sync result for ${newMember.user.tag}`);
