@@ -51,14 +51,18 @@ export const execute = async (interaction) => {
         lastId = fetched.last()?.id;
       } while (fetched && fetched.size === 100);
     }
-    // Update XP for each user
+    // Update XP for each user (overwrite message XP with recalculated value)
     let updatedUsers = 0;
     for (const [userId, count] of Object.entries(userMessageCounts)) {
       let user = getUser(userId);
       if (!user) {
         createUser(userId);
+        user = getUser(userId);
       }
-      updateUserXP(userId, count * xpPerMessage, 0);
+      const newMessageXP = count * xpPerMessage;
+      // Reset existing message XP to 0, then set to the new calculated value
+      updateUserXP(userId, -(user?.xp || 0), 0);
+      updateUserXP(userId, newMessageXP, 0);
       updatedUsers++;
     }
     await interaction.editReply({
