@@ -216,10 +216,46 @@ function initializeDatabase() {
     )
   `);
 
+  // Music tables
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS guild_music_state (
+      guild_id TEXT PRIMARY KEY,
+      volume INTEGER DEFAULT 100,
+      loop_mode TEXT DEFAULT 'off',
+      autoplay INTEGER DEFAULT 0,
+      idle_timeout_sec INTEGER DEFAULT 300,
+      updated_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );
+    
+    CREATE TABLE IF NOT EXISTS guild_queue (
+      guild_id TEXT,
+      position INTEGER,
+      title TEXT,
+      url TEXT,
+      source TEXT,
+      duration_ms INTEGER,
+      requested_by_id TEXT,
+      thumb TEXT,
+      added_at INTEGER DEFAULT (strftime('%s', 'now')),
+      PRIMARY KEY(guild_id, position)
+    );
+    
+    CREATE TABLE IF NOT EXISTS guild_resume_state (
+      guild_id TEXT PRIMARY KEY,
+      track_url TEXT,
+      track_position_ms INTEGER,
+      voice_channel_id TEXT,
+      text_channel_id TEXT,
+      saved_at INTEGER DEFAULT (strftime('%s', 'now'))
+    );
+  `);
+
   // Create indexes for better performance
   db.exec(`
     CREATE INDEX IF NOT EXISTS idx_gv_status ON giveaways(status);
     CREATE INDEX IF NOT EXISTS idx_gve_gv ON giveaway_entries(giveaway_id);
+    CREATE INDEX IF NOT EXISTS idx_guild_queue_guild ON guild_queue(guild_id);
+    CREATE INDEX IF NOT EXISTS idx_guild_queue_position ON guild_queue(guild_id, position);
   `);
 
   logger.info('✅ Database initialized successfully');

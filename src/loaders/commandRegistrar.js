@@ -3,7 +3,9 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import logger from '../utils/logger.js';
 
-dotenv.config();
+// Load environment variables (.env.dev when NODE_ENV=development; override with DOTENV_CONFIG_PATH)
+const _envPath = process.env.DOTENV_CONFIG_PATH || (process.env.NODE_ENV === 'development' ? '.env.dev' : undefined);
+if (_envPath) dotenv.config({ path: _envPath }); else dotenv.config();
 
 // Load all commands
 async function loadAllCommands() {

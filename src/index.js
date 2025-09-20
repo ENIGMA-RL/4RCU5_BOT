@@ -18,6 +18,10 @@ import CleanupService from './features/system/cleanupService.js';
 import logger from './utils/logger.js';
 import { registerJob, startAll } from './scheduler/index.js';
 import { tick as voiceTick } from './features/leveling/voiceSessionService.js';
+import initPlayer from './music/initPlayer.js';
+import { MusicRecommender } from './music/recommender.js';
+import { loadState, saveState, saveQueue, loadQueue, saveResumeState, clearResumeState } from './music/queueStore.js';
+import { buildNowPlaying, createButtonCollector } from './music/nowPlayingUi.js';
 // Ensure database schema and migrations are applied on startup
 import './database/db.js';
 // Tag mirroring and legacy wiring removed
@@ -39,6 +43,13 @@ const client = new Client({
   partials: [Partials.Message, Partials.Channel, Partials.GuildMember, Partials.User]
 });
 
+// Initialize music player
+const player = initPlayer(client);
+const recommender = new MusicRecommender(player);
+
+// Store idle timers per guild
+const idleTimers = new Map();
+
 // Add global error handlers to prevent crashes
 client.on('error', (error) => {
   logger.error({ err: error }, 'Client error');
@@ -59,6 +70,149 @@ process.on('warning', (warning) => {
 
 // Initialize commands collection
 client.commands = new Collection();
+
+// Music player event handlers
+player.events.on('playerStart', async (queue) => {
+  try {
+    const guild = queue.guild;
+    const track = queue.currentTrack;
+    
+    logger.info(`Music started: ${track.title} in ${guild.name}`);
+    
+    // Load guild state
+    const state = loadState(guild.id);
+    
+    // Save resume state
+    saveResumeState(guild.id, track.url, 0, queue.connection?.joinConfig?.channelId, queue.metadata?.channel?.id);
+    
+    // Send now playing embed
+    const nowPlaying = buildNowPlaying(track, state, 0, queue.tracks.size);
+    const message = await queue.metadata?.channel?.send({
+      embeds: [nowPlaying.embed],
+      components: nowPlaying.components
+    });
+    
+    // Create button collector
+    if (message) {
+      createButtonCollector({ user: queue.metadata?.requestedBy, channel: queue.metadata?.channel }, player, guild.id);
+    }
+    
+    // Clear idle timer
+    if (idleTimers.has(guild.id)) {
+      clearTimeout(idleTimers.get(guild.id));
+      idleTimers.delete(guild.id);
+    }
+    
+  } catch (error) {
+    logger.error({ err: error }, 'Error in playerStart event');
+  }
+});
+
+player.events.on('playerFinish', async (queue) => {
+  try {
+    const guild = queue.guild;
+    const state = loadState(guild.id);
+    
+    // Clear resume state when track finishes
+    clearResumeState(guild.id);
+    
+    // Handle autoplay
+    if (state.autoplay && queue.tracks.size === 0) {
+      const track = queue.currentTrack;
+      if (track) {
+        const success = await recommender.addRecommendationToQueue(guild.id, track);
+        if (success) {
+          logger.info(`Added autoplay recommendation to ${guild.name}`);
+        }
+      }
+    }
+    
+  } catch (error) {
+    logger.error({ err: error }, 'Error in playerFinish event');
+  }
+});
+
+player.events.on('emptyQueue', async (queue) => {
+  try {
+    const guild = queue.guild;
+    const state = loadState(guild.id);
+    
+    // Start idle timer
+    const timeout = (state.idle_timeout_sec || 300) * 1000;
+    const timer = setTimeout(async () => {
+      try {
+        if (queue.connection) {
+          queue.disconnect();
+          clearResumeState(guild.id);
+          logger.info(`Disconnected from ${guild.name} due to idle timeout`);
+        }
+      } catch (error) {
+        logger.error({ err: error }, 'Error during idle disconnect');
+      }
+    }, timeout);
+    
+    idleTimers.set(guild.id, timer);
+    
+  } catch (error) {
+    logger.error({ err: error }, 'Error in emptyQueue event');
+  }
+});
+
+player.events.on('error', (queue, error) => {
+  logger.error({ err: error, guildId: queue.guild.id }, 'Music player error');
+});
+
+// Voice state update handler for idle management
+client.on('voiceStateUpdate', (oldState, newState) => {
+  try {
+    const guild = oldState.guild;
+    const node = player.nodes.get(guild.id);
+    
+    if (!node || !node.connection) return;
+    
+    // Check if bot is alone in voice channel
+    const voiceChannel = node.connection.joinConfig?.channelId;
+    if (!voiceChannel) return;
+    
+    const channel = guild.channels.cache.get(voiceChannel);
+    if (!channel || !channel.members) return;
+    
+    const members = channel.members.filter(member => !member.user.bot);
+    
+    if (members.size === 0) {
+      // Start idle timer
+      const state = loadState(guild.id);
+      const timeout = (state.idle_timeout_sec || 300) * 1000;
+      
+      if (idleTimers.has(guild.id)) {
+        clearTimeout(idleTimers.get(guild.id));
+      }
+      
+      const timer = setTimeout(async () => {
+        try {
+          if (node.connection) {
+            node.disconnect();
+            clearResumeState(guild.id);
+            logger.info(`Disconnected from ${guild.name} due to no listeners`);
+          }
+        } catch (error) {
+          logger.error({ err: error }, 'Error during no-listeners disconnect');
+        }
+      }, timeout);
+      
+      idleTimers.set(guild.id, timer);
+    } else {
+      // Clear idle timer if there are listeners
+      if (idleTimers.has(guild.id)) {
+        clearTimeout(idleTimers.get(guild.id));
+        idleTimers.delete(guild.id);
+      }
+    }
+    
+  } catch (error) {
+    logger.error({ err: error }, 'Error in voice state update handler');
+  }
+});
 
 // Main initialization function
 const initializeBot = async () => {
@@ -92,8 +246,15 @@ client.once('ready', async () => {
   });
   
   const cfgGuildId = rolesConfig().mainGuildId || rolesConfig().main_guild_id || null;
-  const GUILD_ID = cfgGuildId || process.env.GUILD_ID;
-  logger.info({ GUILD_ID, source: cfgGuildId ? 'rolesConfig' : 'env' }, 'Selecting main guild');
+  // Force use of config file guild ID, ignore environment variable
+  const GUILD_ID = cfgGuildId;
+  
+  // Override any environment variable
+  if (process.env.GUILD_ID && process.env.GUILD_ID !== GUILD_ID) {
+    logger.warn(`Environment variable GUILD_ID (${process.env.GUILD_ID}) differs from config (${GUILD_ID}). Using config value.`);
+    process.env.GUILD_ID = GUILD_ID;
+  }
+  logger.info({ GUILD_ID, cfgGuildId, envGuildId: process.env.GUILD_ID, source: cfgGuildId ? 'rolesConfig' : 'env' }, 'Selecting main guild');
   let guild = client.guilds.cache.get(GUILD_ID);
   // Attempt to fetch the configured guild if not in cache
   if (!guild && GUILD_ID) {
@@ -214,6 +375,54 @@ client.once('ready', async () => {
       logger.info('Giveaway system initialized');
     } catch (error) {
       logger.error({ err: error }, 'Failed to initialize giveaway system');
+    }
+
+    // Resume music on startup
+    logger.info('Checking for music to resume...');
+    try {
+      const { loadResumeState } = await import('./music/queueStore.js');
+      const resumeState = loadResumeState(guild.id);
+      
+      if (resumeState && resumeState.voice_channel_id && resumeState.track_url) {
+        const voiceChannel = guild.channels.cache.get(resumeState.voice_channel_id);
+        if (voiceChannel && voiceChannel.isVoiceBased()) {
+          const node = player.nodes.get(guild.id);
+          if (!node) {
+            player.nodes.create(guild.id, {
+              metadata: {
+                channel: guild.channels.cache.get(resumeState.text_channel_id),
+                client: guild.members.me,
+                requestedBy: guild.members.me
+              },
+              selfDeaf: true,
+              volume: 80,
+              leaveOnEnd: false,
+              leaveOnStop: false,
+              leaveOnEmpty: false
+            });
+          }
+          
+          await node.connect(voiceChannel);
+          const searchResult = await player.search(resumeState.track_url, {
+            requestedBy: guild.members.me
+          });
+          
+          if (searchResult.hasTracks()) {
+            node.queue.addTrack(searchResult.tracks[0]);
+            await node.play();
+            
+            // Seek to saved position
+            if (resumeState.track_position_ms > 0) {
+              // Note: Seeking might not be available in all cases
+              logger.info(`Resumed music at position ${resumeState.track_position_ms}ms`);
+            }
+            
+            logger.info(`Resumed music in ${guild.name}: ${searchResult.tracks[0].title}`);
+          }
+        }
+      }
+    } catch (error) {
+      logger.error({ err: error }, 'Failed to resume music');
     }
   } else {
     logger.error({ GUILD_ID }, 'Could not find guild with ID');
