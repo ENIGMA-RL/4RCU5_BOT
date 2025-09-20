@@ -1,6 +1,6 @@
 import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
-import { createUser, getUser, markUserActive, markUserLeftServer } from '../../repositories/usersRepo.js';
-import { getAllUsers } from '../../repositories/usersAdminRepo.js';
+import { createUser, getUser, markUserActive } from '../../repositories/usersRepo.js';
+import { getAllUsers, markUserLeftServer } from '../../repositories/usersAdminRepo.js';
 import { syncLevelRoles } from '../../features/leveling/levelRoleSync.js';
 import { rolesConfig } from '../../config/configLoader.js';
 import logger from '../../utils/logger.js';
