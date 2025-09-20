@@ -2,20 +2,9 @@ import { SlashCommandBuilder, PermissionFlagsBits } from 'discord.js';
 import { createUser, getUser, markUserActive } from '../../repositories/usersRepo.js';
 import { getAllUsers, markUserLeftServer } from '../../repositories/usersAdminRepo.js';
 import { syncLevelRoles } from '../../features/leveling/levelRoleSync.js';
-import { rolesConfig } from '../../config/configLoader.js';
+import { calculateLevel } from '../../features/leveling/levelingSystem.js';
+import { rolesConfig, levelSettingsConfig } from '../../config/configLoader.js';
 import logger from '../../utils/logger.js';
-
-const xpThresholds = {
-  '1': 25, '2': 150, '3': 300, '4': 500, '5': 750, '6': 1150, '7': 1600, '8': 2000, 
-  '9': 2800, '10': 3850, '11': 5200, '12': 6850, '13': 8900, '14': 11400, '15': 14500
-};
-
-function calculateLevel(xp) {
-  for (let i = 15; i >= 1; i--) {
-    if (xp >= xpThresholds[i]) return i;
-  }
-  return 1;
-}
 
 export const data = new SlashCommandBuilder()
   .setName('sync-database')
@@ -88,41 +77,34 @@ export const execute = async (interaction) => {
           logger.debug(`✅ Marked user ${user.user_id} as left server`);
         }
         
-        // Step 3b: Recalculate levels based on XP
+        // Step 3b: ALWAYS recalculate levels based on XP (force update)
         const messageXP = user.xp || 0;
         const voiceXP = user.voice_xp || 0;
         const totalXP = messageXP + voiceXP;
         
-        const calculatedMessageLevel = calculateLevel(messageXP);
-        const calculatedVoiceLevel = calculateLevel(voiceXP);
-        const calculatedTotalLevel = calculateLevel(totalXP);
+        const leveling = levelSettingsConfig().leveling;
+        const calculatedMessageLevel = calculateLevel(messageXP, leveling.xpThresholds);
+        const calculatedVoiceLevel = calculateLevel(voiceXP, leveling.xpThresholds);
+        const calculatedTotalLevel = calculateLevel(totalXP, leveling.xpThresholds);
         
-        // Check if levels need updating
-        const needsLevelUpdate = 
-          user.level !== calculatedMessageLevel ||
-          user.voice_level !== calculatedVoiceLevel ||
-          user.total_level !== calculatedTotalLevel;
+        // ALWAYS update levels (force recalculation)
+        const updateStmt = `
+          UPDATE users 
+          SET level = ?, voice_level = ?, total_level = ? 
+          WHERE user_id = ?
+        `;
         
-        if (needsLevelUpdate) {
-          // Update levels in database
-          const updateStmt = `
-            UPDATE users 
-            SET level = ?, voice_level = ?, total_level = ? 
-            WHERE user_id = ?
-          `;
-          
-          // We need to import db for this direct query
-          const { default: db } = await import('../../database/connection.js');
-          db.prepare(updateStmt).run(
-            calculatedMessageLevel,
-            calculatedVoiceLevel, 
-            calculatedTotalLevel,
-            user.user_id
-          );
-          
-          stats.levelsRecalculated++;
-          logger.debug(`✅ Updated levels for user ${user.user_id}: M${calculatedMessageLevel} V${calculatedVoiceLevel} T${calculatedTotalLevel}`);
-        }
+        // We need to import db for this direct query
+        const { default: db } = await import('../../database/connection.js');
+        db.prepare(updateStmt).run(
+          calculatedMessageLevel,
+          calculatedVoiceLevel, 
+          calculatedTotalLevel,
+          user.user_id
+        );
+        
+        stats.levelsRecalculated++;
+        logger.debug(`✅ FORCED level update for user ${user.user_id}: M${calculatedMessageLevel} V${calculatedVoiceLevel} T${calculatedTotalLevel} (XP: ${totalXP})`);
         
         // Step 3c: Handle CNS tag status (only if user is in server)
         if (isInServer && member) {
