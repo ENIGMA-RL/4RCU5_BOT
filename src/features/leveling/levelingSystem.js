@@ -23,11 +23,11 @@ function toThresholdArray(thresholdsLike) {
 
 export function calculateLevel(xp, thresholdsLike) {
   const thresholds = toThresholdArray(thresholdsLike);
-  if (!thresholds || thresholds.length === 0) return 1;
+  if (!thresholds || thresholds.length === 0) return 0;
   for (let i = thresholds.length - 1; i >= 0; i--) {
     if (xp >= (thresholds[i] || 0)) return i + 1;
   }
-  return 1;
+  return 0;
 }
 
 function getXPForNextLevel(currentLevel, thresholdsLike) {
