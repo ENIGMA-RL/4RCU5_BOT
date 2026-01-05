@@ -4,34 +4,46 @@ import logger from '../../utils/logger.js';
 
 let rotationTimer = null;
 
-function pickActivity(cfg) {
-  const activities = cfg?.presence?.activities;
-  if (Array.isArray(activities) && activities.length > 0) {
-    return activities[Math.floor(Math.random() * activities.length)];
+function applyPresence(client, cfg, activity) {
+  if (!client?.user) {
+    logger.warn('Cannot set presence: client.user is not available');
+    return;
   }
-  // Default to original behavior: Listening to VAIIYA
-  return { name: cfg?.presence?.default || 'VAIIYA', type: 3 };
+  client.user.setPresence({
+    activities: [{ name: activity.name, type: activity.type }],
+    status: cfg?.presence?.status || 'online',
+  });
 }
 
 function setPresence(client) {
   try {
     const cfg = botConfig();
-    const activity = pickActivity(cfg);
-    client.user.setPresence({
-      activities: [activity],
-      status: cfg?.presence?.status || 'online',
-    });
-    logger.info('✅ Presence set');
-    // optional rotation
-    const shouldRotate = Boolean(cfg?.presence?.rotate);
-    const rotateMs = Number(cfg?.presence?.rotate_ms || 0);
-    if (rotationTimer) { clearInterval(rotationTimer); rotationTimer = null; }
-    if (shouldRotate && rotateMs > 0 && Array.isArray(cfg?.presence?.activities) && cfg.presence.activities.length > 1) {
-      rotationTimer = setInterval(() => {
-        const next = pickActivity(cfg);
-        client.user.setPresence({ activities: [next], status: cfg?.presence?.status || 'online' });
-      }, rotateMs);
+    const activities = Array.isArray(cfg?.presence?.activities) ? cfg.presence.activities : [];
+
+    if (rotationTimer) { clearTimeout(rotationTimer); rotationTimer = null; }
+
+    // no rotation, just set first or default
+    if (!cfg?.presence?.rotate || activities.length === 0) {
+      const one = activities[0] || { name: cfg?.presence?.default || 'VAIIYA', type: 3 };
+      applyPresence(client, cfg, one);
+      logger.info('✅ Presence set');
+      return;
     }
+
+    // cycle rotation with per-activity durations
+    let i = 0;
+    const tick = () => {
+      const act = activities[i] || activities[0];
+      logger.debug({ index: i, activity: act, wait: Number(act.duration_ms || cfg?.presence?.rotate_ms || 30000) }, 'Rotating presence');
+      applyPresence(client, cfg, act);
+
+      const wait = Number(act.duration_ms || cfg?.presence?.rotate_ms || 30000);
+      i = (i + 1) % activities.length;
+      rotationTimer = setTimeout(tick, wait);
+    };
+
+    tick();
+    logger.info('✅ Presence rotation started');
   } catch (e) {
     logger.error({ err: e }, 'Failed to set presence');
   }

@@ -3,12 +3,12 @@
   "ownerID": "291218960471293953",
   "botRole": "1245019955439599676",
   "presence": {
-    "status": "online",
-    "rotate": false,
-    "rotate_ms": 300000,
-    "default": "VAIIYA",
-    "activities": [
-      { "name": "VAIIYA", "type": 3 }
-    ]
+  "status": "online",
+  "rotate": true,
+  "activities": [
+    { "name": "Watching VAIIYA", "type": 3, "duration_ms": 30000 },
+    { "name": "Use /help", "type": 0, "duration_ms": 10000 }
+   ]
   }
 } 
+

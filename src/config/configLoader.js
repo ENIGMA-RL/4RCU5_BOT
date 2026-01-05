@@ -16,8 +16,9 @@ const configCache = new Map();
 // Schemas
 const activitySchema = z.object({
   name: z.string().min(1),
-  type: z.number().optional()
-});
+  type: z.number().optional(),
+  duration_ms: z.number().optional()
+}).passthrough();
 
 const presenceSchema = z.object({
   status: z.string().optional(),
