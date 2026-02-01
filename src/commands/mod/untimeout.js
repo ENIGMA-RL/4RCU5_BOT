@@ -6,12 +6,12 @@ import logger from '../../utils/logger.js';
 
 export const data = {
   name: 'untimeout',
-  description: 'Removes timeout from a user (format: @username)',
+  description: 'Removes timeout from a user',
   options: [
     {
       name: 'user',
-      type: ApplicationCommandOptionType.String,
-      description: 'The user to remove timeout from (e.g., @username)',
+      type: ApplicationCommandOptionType.User,
+      description: 'The user to remove timeout from',
       required: true,
     },
   ],
@@ -31,30 +31,9 @@ export const execute = async (interaction) => {
     return;
   }
 
-  const input = interaction.options.getString('user');
-  
-  // Parse the input to extract user mention
-  const mentionMatch = input.match(/<@!?\d+>/);
-  if (!mentionMatch) {
-    await interaction.reply({ 
-      content: 'Please mention a user with @username.', 
-      flags: 64 
-    });
-    return;
-  }
-  
-  const userId = mentionMatch[1];
-  
-  const user = await interaction.client.users.fetch(userId).catch(() => null);
-  if (!user) {
-    await interaction.reply({ 
-      content: 'Could not find the specified user.', 
-      flags: 64 
-    });
-    return;
-  }
-  
-  const member = await interaction.guild.members.fetch(userId);
+  const user = interaction.options.getUser('user');
+
+  const member = await interaction.guild.members.fetch(user.id).catch(() => null);
   if (!member) {
     await interaction.reply({ 
       content: 'That user is not a member of this server.', 
