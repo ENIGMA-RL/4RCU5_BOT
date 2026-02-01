@@ -334,10 +334,26 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
   const startY = cardY + 110;
   const rowH = 52;
   const avatarSize = 36;
-  const maxUsernameLen = 18;
-  function truncateUsername(name) {
-    if (!name || name.length <= maxUsernameLen) return name || '';
-    return name.slice(0, maxUsernameLen) + '...';
+  const nameStartX = col1X + 68;
+  const xpRightX = col1X + colW - 16;
+  const gapBetweenNameAndXp = 10;
+  const rowFont = 'bold 18px Montserrat, Arial';
+
+  function measureXpWidth(ctx, xp) {
+    ctx.font = rowFont;
+    return ctx.measureText(`XP: ${xp}`).width;
+  }
+
+  function truncateUsernameByWidth(ctx, name, maxWidthPx) {
+    if (!name) return '';
+    ctx.font = rowFont;
+    if (ctx.measureText(name).width <= maxWidthPx) return name;
+    const ellipsis = '...';
+    const ellipsisWidth = ctx.measureText(ellipsis).width;
+    if (ellipsisWidth >= maxWidthPx) return ellipsis;
+    let len = name.length;
+    while (len > 0 && ctx.measureText(name.slice(0, len) + ellipsis).width > maxWidthPx) len--;
+    return name.slice(0, len) + ellipsis;
   }
 
   // Column titles
@@ -382,16 +398,18 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
           ctx.fill();
         }
       }
-      // Username
-      ctx.font = 'bold 18px Montserrat, Arial';
+      // Username (truncate by pixel width so it never hits XP)
+      const xpWidth1 = measureXpWidth(ctx, user.xp);
+      const maxNameW1 = xpRightX - xpWidth1 - nameStartX - gapBetweenNameAndXp;
+      ctx.font = rowFont;
       ctx.fillStyle = '#fff'; // All users shown are active members
       ctx.textAlign = 'left';
-      ctx.fillText(truncateUsername(user.username), col1X + 68, rowCenterY);
+      ctx.fillText(truncateUsernameByWidth(ctx, user.username, maxNameW1), nameStartX, rowCenterY);
       // XP
-      ctx.font = 'bold 18px Montserrat, Arial';
+      ctx.font = rowFont;
       ctx.fillStyle = '#ff7bac';
       ctx.textAlign = 'right';
-      ctx.fillText(`XP: ${user.xp}`, col1X + colW - 16, rowCenterY);
+      ctx.fillText(`XP: ${user.xp}`, xpRightX, rowCenterY);
     }
     // Voice XP column
     const vuser = voiceUsers[i];
@@ -420,14 +438,18 @@ async function createLeaderboardCard(textUsers, voiceUsers, page) {
           ctx.fill();
         }
       }
-      ctx.font = 'bold 18px Montserrat, Arial';
+      const nameStartX2 = col2X + 68;
+      const xpRightX2 = col2X + colW - 16;
+      const xpWidth2 = measureXpWidth(ctx, vuser.voice_xp);
+      const maxNameW2 = xpRightX2 - xpWidth2 - nameStartX2 - gapBetweenNameAndXp;
+      ctx.font = rowFont;
       ctx.fillStyle = '#fff'; // All users shown are active members
       ctx.textAlign = 'left';
-      ctx.fillText(truncateUsername(vuser.username), col2X + 68, rowCenterY);
-      ctx.font = 'bold 18px Montserrat, Arial';
+      ctx.fillText(truncateUsernameByWidth(ctx, vuser.username, maxNameW2), nameStartX2, rowCenterY);
+      ctx.font = rowFont;
       ctx.fillStyle = '#3ecbff';
       ctx.textAlign = 'right';
-      ctx.fillText(`XP: ${vuser.voice_xp}`, col2X + colW - 16, rowCenterY);
+      ctx.fillText(`XP: ${vuser.voice_xp}`, xpRightX2, rowCenterY);
     }
   }
   ctx.textBaseline = 'alphabetic';
