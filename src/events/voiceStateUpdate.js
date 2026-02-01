@@ -234,11 +234,11 @@ export const execute = async (oldState, newState) => {
     // If user left a voice channel
     if (oldState.channelId && !newState.channelId) {
       logger.debug(`👋 ${oldState.member.user.tag} left voice channel: ${oldState.channel ? oldState.channel.name : 'Unknown Channel'}`);
-      onLeave(oldState.member);
+      onLeave(oldState.member, oldState);
     }
     // If user switched channels
     if (oldState.channelId && newState.channelId && oldState.channelId !== newState.channelId) {
-      onSwitch(oldState.member, newState.member);
+      onSwitch(oldState.member, newState.member, oldState);
     }
   } catch (error) {
     logger.error({ err: error }, 'Error handling voice state update');
