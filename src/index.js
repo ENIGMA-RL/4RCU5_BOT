@@ -1,6 +1,7 @@
 // Create the initial folder structure and main bot file
 
 // Import necessary modules
+import { EventEmitter } from 'events';
 import { Client, GatewayIntentBits, Collection, Partials, ApplicationCommandOptionType } from 'discord.js';
 import dotenv from 'dotenv';
 import { updateStats } from './features/stats/statsUpdater.js';
@@ -25,6 +26,8 @@ import './database/db.js';
 // Load environment variables (.env.dev when NODE_ENV=development; override with DOTENV_CONFIG_PATH)
 const _envPath = process.env.DOTENV_CONFIG_PATH || (process.env.NODE_ENV === 'development' ? '.env.dev' : undefined);
 if (_envPath) dotenv.config({ path: _envPath }); else dotenv.config();
+
+EventEmitter.defaultMaxListeners = 20;
 
 // Initialize the Discord client
 const client = new Client({

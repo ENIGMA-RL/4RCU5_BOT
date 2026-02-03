@@ -18,13 +18,13 @@ export const execute = async (interaction) => {
   const isAdmin = member.roles.cache.some(role => adminRoles.includes(role.id));
   
   if (!isAdmin) {
-    return interaction.reply({ 
-      content: '❌ This command is restricted to administrators only.', 
-      ephemeral: true 
+    return interaction.reply({
+      content: '❌ This command is restricted to administrators only.',
+      flags: 64
     });
   }
 
-  await interaction.deferReply({ ephemeral: true });
+  await interaction.deferReply({ flags: 64 });
 
   try {
     const guild = interaction.guild;
@@ -207,9 +207,9 @@ export const execute = async (interaction) => {
     
   } catch (error) {
     logger.error({ err: error }, 'Error during database sync');
-    await interaction.editReply({ 
-      content: `❌ Database sync failed: ${error.message}`, 
-      ephemeral: true 
+    await interaction.editReply({
+      content: `❌ Database sync failed: ${error.message}`,
+      flags: 64
     });
   }
 };
