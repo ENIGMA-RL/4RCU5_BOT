@@ -22,6 +22,76 @@
     "whiteHatHacker": "1395461013574254643",
     "blackHatHacker": "1395461073615851571"
   },
+  "roleCategories": [
+    {
+      "id": "1473915172660838433",
+      "name": "staff",
+      "roles": [
+        { "name": "CNS Admin", "id": "1390075310090747904" },
+        { "name": "CNS Mod", "id": "1390075438646165636" },
+        { "name": "CNS Helper", "id": "1390076652372889771" },
+        { "name": "CNS Developer", "id": "1390082142842912809" }
+      ]
+    },
+    {
+      "id": "1473916653107544229",
+      "name": "specialRoles",
+      "roles": [
+        { "name": "CNS Official", "id": "1389859132198096946" },
+        { "name": "CNS Executive", "id": "1473910177441775647" },
+        { "name": "Special CNS Member", "id": "1245130379321544724" },
+        { "name": "MM Tournament Winner", "id": "1471593403878871253" },
+        { "name": "Giveaway Winner", "id": "1393668455609401375" },
+        { "name": "Birthday", "id": "1396480852493340762" }
+      ]
+    },
+    {
+      "id": "1473918571842371626",
+      "name": "levelRoles",
+      "roles": [
+        { "name": "CNS Newcomer", "id": "1245023434686333049" },
+        { "name": "CNS Rookie", "id": "1397696673962004632" },
+        { "name": "CNS Member", "id": "1245022253431914547" },
+        { "name": "CNS Veteran", "id": "1395460298768384182" },
+        { "name": "CNS Master", "id": "1395460661739520173" },
+        { "name": "CNS Legend", "id": "1395460875682316439" },
+        { "name": "Black Hat Hacker", "id": "1395461073615851571" },
+        { "name": "White Hat Hacker", "id": "1395461013574254643" },
+        { "name": "CNS Exploit Developer", "id": "1395460942241861713" }
+      ]
+    },
+    {
+      "id": "1473918745670979658",
+      "name": "tagRoles",
+      "roles": [
+        { "name": "Ranked (EU)", "id": "1456286622281891871" },
+        { "name": "World Tour (EU)", "id": "1456286736387932253" },
+        { "name": "Quick Play (EU)", "id": "1456286857078903009" },
+        { "name": "Ranked (NA)", "id": "1456287007973052438" },
+        { "name": "World Tour (NA)", "id": "1456287049740062843" },
+        { "name": "Quick Play (NA)", "id": "1456287135303729162" },
+        { "name": "Server Updates", "id": "1391121876759347340" },
+        { "name": "Event Updates", "id": "1391419757625872435" },
+        { "name": "Social Updates", "id": "1391420834186264658" },
+        { "name": "Patch Notes", "id": "1405933206976331816" },
+        { "name": "Game Update", "id": "1405933266019684385" }
+      ]
+    },
+    {
+      "id": "1473919074290630708",
+      "name": "misc",
+      "roles": [
+        { "name": "CNS", "id": "1026533888677388309" },
+        { "name": "CNS Staff", "id": "1390105618672517190" },
+        { "name": "Tournament Staff", "id": "1473317478968066212" },
+        { "name": "Tournament Player", "id": "1473317654411481139" },
+        { "name": "Français", "id": "1455282989285113930" },
+        { "name": "Freak King", "id": "1465485956223340711" },
+        { "name": "+", "id": "1448383064618045481" },
+        { "name": "Polls", "id": "1420003302384599050" }
+      ]
+    }
+  ],
   "commandPermissions": {
     "admin": [
       "role-assign",

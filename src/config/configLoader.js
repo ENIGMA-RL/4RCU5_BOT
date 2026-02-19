@@ -62,6 +62,21 @@ const rolesSchema = z.object({
   cnsSpecialMemberRole: z.string().min(1),
   staffRole: z.string().min(1),
   levelRoles: z.record(z.string(), z.string().min(1)),
+  roleCategories: z
+    .array(
+      z.object({
+        id: z.string().min(1),
+        categoryRoleId: z.string().min(1).optional(),
+        name: z.string().min(1),
+        roles: z.array(
+          z.object({
+            name: z.string().min(1),
+            id: z.string().min(1)
+          })
+        )
+      })
+    )
+    .optional(),
   commandPermissions: z.object({
     admin: z.array(z.string().min(1)),
     mod: z.array(z.string().min(1)),
