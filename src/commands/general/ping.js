@@ -18,7 +18,8 @@ export const execute = async (interaction) => {
       cdSet(interaction.member, 'ping');
     }
   } catch {}
-  const sent = await interaction.reply({ content: 'Calculating latency...', fetchReply: true });
+  await interaction.reply({ content: 'Calculating latency...' });
+  const sent = await interaction.fetchReply();
   const latency = sent.createdTimestamp - interaction.createdTimestamp;
   await interaction.editReply(`Latency: ${latency}ms`);
 }; 
