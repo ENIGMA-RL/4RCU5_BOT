@@ -4,6 +4,7 @@ import { giveawayConfig } from '../config/configLoader.js';
 import { recordRoleFirstSeen } from '../repositories/tagRepo.js';
 import logger from '../utils/logger.js';
 import { syncUserTagRole } from '../features/tagSync/tagSyncService.js';
+import { syncRoleCategoriesForMember } from '../utils/roleCategorySync.js';
 
 export const name = 'guildMemberUpdate';
 export const once = false;
@@ -41,6 +42,10 @@ export async function execute(oldMember, newMember) {
     // Check if any staff roles were added or removed
     const oldRoles = oldMember.roles.cache;
     const newRoles = newMember.roles.cache;
+
+    const rolesChanged =
+      oldRoles.size !== newRoles.size ||
+      Array.from(oldRoles.keys()).some((id) => !newRoles.has(id));
     
     const staffRoleIds = staffConfig().staffRoles.map(role => role.id);
     
@@ -59,6 +64,16 @@ export async function execute(oldMember, newMember) {
           logger.error({ err: error }, 'Error updating staff embed after role change');
         }
       }, 2000); // 2 second delay
+    }
+
+    if (rolesChanged) {
+      setTimeout(async () => {
+        try {
+          await syncRoleCategoriesForMember(newMember, 'Role category sync');
+        } catch (err) {
+          logger.error({ err }, 'Error running role category sync');
+        }
+      }, 500);
     }
     
   } catch (error) {
