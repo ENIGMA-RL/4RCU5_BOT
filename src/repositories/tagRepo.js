@@ -100,4 +100,8 @@ export function getRoleFirstSeen(guildId, userId, roleId) {
   return row ? row.first_seen_at : null;
 }
 
+export function clearRoleFirstSeen(guildId, userId, roleId) {
+  return db.prepare(`DELETE FROM role_tenure WHERE guild_id=? AND user_id=? AND role_id=?`).run(guildId, userId, roleId);
+}
+
 

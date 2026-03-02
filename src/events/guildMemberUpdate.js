@@ -1,7 +1,7 @@
 import { refreshStaffEmbed } from '../features/staff/staffEmbed.js';
 import { staffConfig } from '../config/configLoader.js';
 import { giveawayConfig } from '../config/configLoader.js';
-import { recordRoleFirstSeen } from '../repositories/tagRepo.js';
+import { recordRoleFirstSeen, clearRoleFirstSeen } from '../repositories/tagRepo.js';
 import logger from '../utils/logger.js';
 import { syncUserTagRole } from '../features/tagSync/tagSyncService.js';
 import { syncRoleCategoriesForMember } from '../utils/roleCategorySync.js';
@@ -20,6 +20,8 @@ export async function execute(oldMember, newMember) {
     const has = newMember.roles.cache.has(tagId);
     if (!had && has) {
       recordRoleFirstSeen(newMember.guild.id, newMember.id, tagId);
+    } else if (had && !has) {
+      clearRoleFirstSeen(newMember.guild.id, newMember.id, tagId);
     }
   }
 

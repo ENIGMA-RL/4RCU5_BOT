@@ -69,8 +69,11 @@ class GiveawayService {
   async isEligible(member) {
     const cfg = this.getConfig();
     if (member.roles.cache.has(cfg.cns_member_role_id)) return true;
-    const roleId = cfg.tag_eligibility.cns_tag_role_id;
-    const minDays = cfg.tag_eligibility.min_role_age_days ?? 30;
+    const tagEligibilityEnabled = cfg.tag_eligibility?.enabled !== false;
+    if (!tagEligibilityEnabled) return false;
+    const roleId = cfg.tag_eligibility?.cns_tag_role_id;
+    const configuredMinDays = cfg.tag_eligibility?.min_role_age_days ?? 30;
+    const minDays = Math.max(30, configuredMinDays);
     if (roleId && member.roles.cache.has(roleId)) {
       const first = getRoleFirstSeen(member.guild.id, member.id, roleId);
       if (!first) return false;
